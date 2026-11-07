@@ -113,7 +113,7 @@ button, select { touch-action:manipulation; }
   <button id="bReset">문구 원래대로</button>
   <button id="bData">데이터 원래대로</button>
 </div>
-<div style="display:flex;align-items:center;gap:10px;padding:5px 12px;background:#edf2f8;font:13px sans-serif;flex-wrap:wrap"><label>보고 주차 <select id="weekSource"><option value="">첨부 W45 원본</option></select></label><button id="sheetRefresh">시트 새로고침</button><span role="status" id="sheetStatus">첨부 W45 원본</span></div><div id="tabs"></div>
+<div style="display:flex;align-items:center;gap:10px;padding:5px 12px;background:#edf2f8;font:13px sans-serif;flex-wrap:wrap"><label>주차별 아카이브 <select id="weekSource"><option value="">첨부 W45 원본</option></select></label><button id="sheetRefresh">시트 새로고침</button><span role="status" id="sheetStatus">첨부 W45 원본</span></div><div id="tabs"></div>
 <div id="main"><aside id="panel"></aside><section id="stage"></section></div>
 <div id="show"><div id="showwrap"></div><div id="showtop"><button id="showfs" title="전체 화면 켜기/끄기">전체화면</button><button id="showx" title="발표 종료 (Esc)">✕ 닫기</button></div><div id="showtip"></div><div id="showhud"><button id="showprev">◀ 이전</button><span id="showcnt"></span><button id="shownext">다음 ▶</button></div></div>
 <div id="toast"></div>
@@ -928,9 +928,9 @@ function lab(v, dec) {                                                          
   }
   return dec === null || dec === undefined ? pxTxt(v) : fmt(v, dec);
 }
-function pctStr(p) { return (p > 0 ? '+' : (p < 0 ? '△' : '')) + fmt(Math.abs(p), 2) + '%'; }   // 등락률 문자열
+function pctStr(p) { if(!Number.isFinite(p))return '미등록'; return (p > 0 ? '+' : (p < 0 ? '△' : '')) + fmt(Math.abs(p), 2) + '%'; }   // 등락률 문자열
 function firstSent(t) { return String(t).split(/(?<=[가-힣])\.\s+/)[0].replace(/\.$/, ''); }      // 첫 문장
-function dirOf(chg) { return chg > 0 ? '상승' : (chg < 0 ? '하락' : '보합'); }
+function dirOf(chg) { if(!Number.isFinite(chg))return '미등록'; return chg > 0 ? '상승' : (chg < 0 ? '하락' : '보합'); }
 function dirColor(chg) { const st = ST.style; return chg > 0 ? st.red : (chg < 0 ? st.sub : COL.mute); }   // 상승=빨강 / 하락=파랑
 function dirTone(chg) { return chg > 0 ? 'rose' : (chg < 0 ? 'blue' : 'gray'); }          // 방향별 바탕
 
@@ -945,6 +945,7 @@ function kpiBox(id, x, y, w, h, title, value, vcolor, sub, scolor, tone, vs) {
 // o : { vals, cats, daily, dec, compact, color(방향색), unitLegend, onlyIdx }
 function niceStep(span) { return span <= 5 ? 1 : (span <= 30 ? 5 : (span <= 100 ? 10 : (span <= 400 ? 50 : 100))); }
 function priceChart(id, x, y, w, h, o) {
+  if(report && (o.vals.length<2 || o.vals.some(v=>!isNum(v)))) { const values=o.vals.map((v,i)=>o.cats[i]+' '+(isNum(v)?v:'—'));return [T(id,x,y,w,h,values.join('   '),{size:o.compact?7:10,inset:.05})]; }
   const st = ST.style, vals = o.vals, n = vals.length, last = n - 1;
   const prev = o.daily ? vals[0] : vals[n - 2], cur = vals[last], chg = cur - prev;
   const lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
@@ -1029,6 +1030,7 @@ const ITEM = {
 
 // 품목별 KPI 3·4번(보드 본문에서 가져온 수치 · SM 은 입력 그리드와 연동)
 function extraKpi(k, vals, prev, cur) {
+  if(report && WEEK.endFull!==seedEnd){const v=rowOf('w_'+gid(k),'v').filter(isNum);return [['기간 최고가',v.length?String(Math.max(...v)):'미등록','000000','최근 '+WK10.length+'주'],['기간 최저가',v.length?String(Math.min(...v)):'미등록','000000','최근 '+WK10.length+'주']];}
   const st = ST.style;
   if (k === 'SM') {
     const op0 = cellOf('gk', 'op', 0), op1 = cellOf('gk', 'op', 1), iv0 = cellOf('gk', 'inv', 0), iv1 = cellOf('gk', 'inv', 1);
@@ -1049,10 +1051,10 @@ function extraKpi(k, vals, prev, cur) {
 function buildItem(k) {
   const st = ST.style, c = ITEM[k], t = TXT[k], g = gid(k);
   const vals = c.daily ? rowOf('d_' + g, 'v') : rowOf('w_' + g, 'v');
-  const n = vals.length, prev = c.daily ? vals[0] : vals[n - 2], cur = vals[n - 1];
-  const chg = cur - prev, pct = prev ? chg / prev * 100 : 0, dn = dirOf(chg), dc = dirColor(chg);
-  const dateEnd = k === 'AN' ? '11/3' : WEEK.end;
-  const pf = v => pfx(v, c.dec);
+  const n = vals.length, prev = report ? livePcts(k).prev : c.daily ? vals[0] : vals[n-2], cur = report ? livePcts(k).cur : vals[n-1];
+  const chg = report ? livePcts(k).chg : cur-prev, pct = report ? livePcts(k).pct : prev ? chg / prev * 100 : 0, dn = dirOf(chg), dc = dirColor(chg);
+  const dateEnd = report ? (String(currentRow(k).assessment_date||WEEK.endFull).slice(0,10)) : k === 'AN' ? '11/3' : WEEK.end;
+  const pf = v => report ? (isNum(v)?String.fromCharCode(36)+v.toLocaleString('en-US',{maximumFractionDigits:4}):'미등록') : pfx(v,c.dec);
   const chgTxt = (chg > 0 ? '+' : (chg < 0 ? '△' : '')) + (chg === 0 ? '0' : fmt(Math.abs(chg), c.dec === null ? (Math.abs(chg - Math.round(chg)) < 0.005 ? 0 : 1) : c.dec));   // 변동폭 문자열
   // --- 상단: 제목 · □ 메시지 2줄 ---
   const p1 = [R('□ '), R(c.label + ' 주간 '), R(pctStr(pct) + ' ' + dn + ' (' + pf(prev) + ' → ' + pf(cur) + c.unit + ')', { u: true, c: dc }), R(c.tail1)];
@@ -1072,7 +1074,7 @@ function buildItem(k) {
   const avail = YE - y0 - 2 * GAP, r2 = 1.47, r3 = 1.65, r1 = avail - r2 - r3;
   const Y1 = y0, Y2 = y0 + r1 + GAP, Y3 = Y2 + r2 + GAP;
   els.push(pbox('b1', LX, Y1, LW, r1, '1', '가격 추이', { t: '(' + c.bm + ')', c: COL.mute }, [], { tone: 'blue', bs: 8 }));
-  const cats = c.daily ? ['10/30'].concat(G('d_' + g).cols.slice(1)) : WK10;
+  const cats = c.daily ? G('d_'+g).cols.map(v=>v.replace('(전주)','')) : WK10;
   priceChart('chart', LX + 0.04, Y1 + 0.27, LW - 0.08, r1 - 0.31, { vals: vals, cats: cats, daily: c.daily, dec: c.dec === null ? null : c.dec, legendName: 'CFR 평가' }).forEach(e => els.push(e));
   els.push(pbox('b2', RX, Y1, RW, r1, '2', '코멘터리', { t: dn + ' 마감', c: dc }, [t.cm], { tone: 'mint', max: 11.5, min: 7.5 }));
   els.push(pbox('b3', LX, Y2, LW, r2, '3', '변동요인', null, t.fa.map(bl), { tone: 'sun', max: 10.5, min: 7.5 }));
@@ -1137,7 +1139,7 @@ function pcts(vals, daily) { const n = vals.length, prev = daily ? vals[0] : val
 
 function buildBase() {
   const st = ST.style, keys = ['Ethylene', 'Propylene', 'Benzene'];
-  const P = {}; keys.forEach(k => { P[k] = pcts(seriesOf(k, MULTI[k].daily), MULTI[k].daily); });
+  const P = {}; keys.forEach(k => { P[k] = report ? livePcts(k) : pcts(seriesOf(k, MULTI[k].daily), MULTI[k].daily); });
   const p1 = [R('□ '), R('에틸렌 '), R(pctStr(P.Ethylene.pct), { u: true, c: dirColor(P.Ethylene.chg) }), R(' · 프로필렌 '), R(pctStr(P.Propylene.pct), { u: true, c: dirColor(P.Propylene.chg) }), R(' 상승, 벤젠 '),
     R(pctStr(P.Benzene.pct) + ' 급락(' + pfx(P.Benzene.prev, 0) + ' → ' + pfx(P.Benzene.cur, 0) + '/mt)', { u: true, c: dirColor(P.Benzene.chg) })];
   const p2 = [R('□ '), R('에틸렌·프로필렌은 크래커 보수·PDH 정지로 '), R('공급 제약', { u: true }), R(', 벤젠은 원유·중국 선물 약세로 '), R('하방 압력', { u: true }), R(' — 유도품 마진 악화가 상단 제한')];
@@ -1153,11 +1155,11 @@ function buildBase() {
     const m = MULTI[k], t = TXT[k], p = P[k], dc = dirColor(p.chg), dn = dirOf(p.chg);
     const x = 0.22 + i * (cw + 0.07);
     let y = y0;
-    els.push(kpiBox('c' + i + '.k', x, y, cw, hK, m.label + ' · ' + m.bm, pfx(p.cur, m.dec) + '/mt   ' + pctStr(p.pct), dc,
+    els.push(kpiBox('c' + i + '.k', x, y, cw, hK, m.label + ' · ' + m.bm, (report ? (currentRow(k).current_price||'미등록') : pfx(p.cur,m.dec)+'/mt')+'   '+pctStr(p.pct), dc,
       '전주 ' + pfx(p.prev, m.dec) + ' 대비 ' + (p.chg > 0 ? '+' : (p.chg < 0 ? '△' : '')) + fmt(Math.abs(p.chg), m.dec === null ? 0 : m.dec) + ' · ' + dn, dc, dirTone(p.chg), 15));
     y += hK + GAP;
     els.push(pbox('c' + i + '.p', x, y, cw, hC, String(i * 4 + 1), '가격 추이', { t: m.daily ? '(일별 · $/mt)' : '(10주 · $/mt)', c: COL.mute }, [], { tone: 'blue', bs: 8, hs: 10 }));
-    priceChart('c' + i + '.chart', x + 0.03, y + 0.24, cw - 0.06, hC - 0.27, { vals: seriesOf(k, m.daily), cats: m.daily ? ['10/30', '11/2', '11/3', '11/4', '11/5', '11/6'] : WKW, daily: m.daily, dec: m.dec, ldec: m.daily ? 0 : m.dec, compact: true, legendName: '평가' }).forEach(e => els.push(e));
+    priceChart('c' + i + '.chart', x + 0.03, y + 0.24, cw - 0.06, hC - 0.27, { vals: seriesOf(k, m.daily), cats: m.daily ? G('d_'+gid(k)).cols : WKW, daily: m.daily, dec: m.dec, ldec: m.daily ? 0 : m.dec, compact: true, legendName: '평가' }).forEach(e => els.push(e));
     y += hC + GAP;
     els.push(pbox('c' + i + '.m', x, y, cw, hM, String(i * 4 + 2), '시황 요약', { t: dn + ' 마감', c: dc }, bodyM(k), { tone: 'mint', bs: ptM, hs: 10 }));
     y += hM + GAP;
@@ -1174,7 +1176,7 @@ function buildBase() {
  * --------------------------------------------------------------------- */
 function buildPoly() {
   const st = ST.style, keys = ['ABS', 'PC', 'EPS', 'PS', 'PBR'];
-  const P = {}; keys.forEach(k => { P[k] = pcts(seriesOf(k, false), false); });
+  const P = {}; keys.forEach(k => { P[k] = report ? livePcts(k) : pcts(seriesOf(k, false), false); });
   const p1 = [R('□ '), R('ABS '), R(pctStr(P.ABS.pct), { u: true, c: dirColor(P.ABS.chg) }), R(' · EPS '), R(pctStr(P.EPS.pct), { u: true, c: dirColor(P.EPS.chg) }), R(' · PS '), R(pctStr(P.PS.pct), { u: true, c: dirColor(P.PS.chg) }),
     R(' 하락, PC '), R(P.PC.chg === 0 ? '보합' : pctStr(P.PC.pct), { u: true }), R(', PBR '), R(pctStr(P.PBR.pct) + ' 상승', { u: true, c: dirColor(P.PBR.chg) })];
   const p2 = [R('□ '), R('SM 급락에 따른 원가 하락 기대로 ABS·EPS·PS는 '), R('구매 관망', { u: true }), R(', PBR만 BD 원가·정비로 오퍼 지지 — PC는 BPA 원가 vs 수요 부진 균형')];
@@ -1191,11 +1193,11 @@ function buildPoly() {
     els.push(T('p' + i + '.i', x, y, wI, rh, [
       [R(k, { size: 13, bold: true, color: '000000' })],
       [R(BM[k], { size: 7, color: COL.mute })],
-      [R(usd(p.cur) + '/mt', { size: 12, bold: true, color: dc })],
+      [R((report ? (currentRow(k).current_price||'미등록') : usd(p.cur) + '/mt'), { size: 12, bold: true, color: dc })],
       [R(pctStr(p.pct) + ' · ' + dn, { size: 9, bold: true, color: dc })]],
       { fill: TONE[dirTone(p.chg)].fill, line: { c: TONE[dirTone(p.chg)].line, w: 0.75 }, rr: true, align: 'l', valign: 'm', inset: 0.08, edit: false, lock: true }));
     x += wI + 0.07;
-    els.push(pbox('p' + i + '.p', x, y, wC, rh, '', '가격 추이', { t: '(W36~W45 · $/mt)', c: COL.mute }, [], { tone: 'blue', bs: 7, hs: 9 }));
+    els.push(pbox('p' + i + '.p', x, y, wC, rh, '', '가격 추이', { t: '('+WKW[0]+'~'+WKW.at(-1)+' · $/mt)', c: COL.mute }, [], { tone: 'blue', bs: 7, hs: 9 }));
     priceChart('p' + i + '.chart', x + 0.02, y + 0.2, wC - 0.04, rh - 0.22, { vals: seriesOf(k, false), cats: WKW.map(w => w.slice(1)), daily: false, dec: null, compact: true }).forEach(e => els.push(e));
     x += wC + 0.07;
     els.push(pbox('p' + i + '.m', x, y, wM, rh, '', '시황 · 전망', null, bodyM(k), { tone: 'mint', bs: ptM, hs: 9, inset: 0.07 }));
@@ -1227,10 +1229,10 @@ function regSlide(els, kL, kR, subL, subR) {
   };
   ks.forEach((k, ci) => {
     const m = REG[k], t = TXT[k], vals = rowOf('w_' + gid(k), 'v'), x = 0.22 + ci * (hw + GAP), g = gid(k);
-    const p = pcts(vals, false), dc = dirColor(p.chg), dn = dirOf(p.chg), us = m.unit === '¢/lb';
-    const pv = v => (us ? fmt(v, v === Math.round(v) ? 0 : 1) + '¢/lb' : usd(v) + '/mt');
+    const p = report ? livePcts(k) : pcts(vals, false), dc = dirColor(p.chg), dn = dirOf(p.chg), us = m.unit === '¢/lb';
+    const pv = v => report ? (currentRow(k).current_price||'미등록') : (us ? fmt(v, v === Math.round(v) ? 0 : 1) + '¢/lb' : usd(v) + '/mt');
     let y = y0;
-    els.push(kpiBox(g + '.k', x, y, hw, hK, m.label + ' · ' + m.bm, pv(p.cur) + '   ' + (p.chg === 0 ? '보합' : pctStr(p.pct)), dc, ci === 0 ? subL : subR, COL.mute, dirTone(p.chg), 15));
+    els.push(kpiBox(g + '.k', x, y, hw, hK, m.label + ' · ' + m.bm, pv(p.cur) + '   ' + (p.chg === 0 ? '보합' : pctStr(p.pct)), dc, report ? '전주 '+(currentRow(k).previous_price||'미등록') : ci === 0 ? subL : subR, COL.mute, dirTone(p.chg), 15));
     y += hK + GAP;
     els.push(pbox(g + '.p', x, y, hw, hC, '1', '가격 추이', { t: '(최근 10주 · ' + m.u2 + ')', c: COL.mute }, [], { tone: 'blue', bs: 8, hs: 10 }));
     priceChart(g + '.chart', x + 0.03, y + 0.24, hw - 0.06, hC - 0.27, { vals: vals, cats: WK10, daily: false, dec: m.dec, diffDec: us ? 'auto' : 0, compact: true }).forEach(e => els.push(e));
@@ -1275,7 +1277,7 @@ const SLIDES = [
   { tab: '⑩ 미국 SM·BD', fn: buildUS, grids: ['w_USSM', 'w_USBD'] },
   { tab: '⑪ 유럽 SM·BD', fn: buildEU, grids: ['w_EUSM', 'w_EUBD'] }
 ];
-function buildSlide(i) { return report ? liveSlide(i) : SLIDES[i].fn(); }                                // 슬라이드 i의 요소 목록 생성
+function buildSlide(i) { return originalSlide(i); }                                // 슬라이드 i의 요소 목록 생성
 
 /* =====================================================================
  * 40_preview.js : 장면(scene) → 화면 미리보기(DOM/SVG) 변환
@@ -1925,7 +1927,7 @@ function download(blob, name) {                                                 
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
-function stamp() { const d = new Date(); return d.getFullYear() + pad(d.getMonth() + 1, 2) + pad(d.getDate(), 2); }   // 날짜 꼬리표
+function stamp() { if(report)return WEEK.endFull; const d = new Date(); return d.getFullYear() + pad(d.getMonth() + 1, 2) + pad(d.getDate(), 2); }   // 날짜 꼬리표
 
 // ---- 버튼 동작 ------------------------------------------------------------
 async function savePng(i, dpi) {                                                // 현재 슬라이드 PNG 저장
@@ -1978,7 +1980,7 @@ function gridHtml(id) {                                                         
     '<div class="gs"><table class="gd"><tr><th></th>' + g.cols.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr>';
   g.rows.forEach((r, ri) => {
     h += '<tr><th>' + esc(r.label) + '</th>' + r.v.map((v, ci) =>
-      '<td><input type="number" step="any" data-g="' + id + '" data-r="' + ri + '" data-c="' + ci + '" value="' + (isNum(v) ? v : '') + '"></td>').join('') + '</tr>';
+      '<td><input '+(report?'readonly ':'')+'type="number" step="any" data-g="' + id + '" data-r="' + ri + '" data-c="' + ci + '" value="' + (isNum(v) ? v : '') + '"></td>').join('') + '</tr>';
   });
   return h + '</table></div></div>';
 }
@@ -1991,9 +1993,9 @@ function renderPanel() {
   const p = $('panel');
   let h = '<div class="pg"><div class="pgt">스타일</div>' + colorRow('기본색(블랙)', 'main') + colorRow('비교선·참고(블루)', 'sub') + colorRow('경고·하락(레드)', 'red') +
     '<label class="row"><span>선 부드럽게(곡선)</span><input type="checkbox" id="smooth"' + (ST.style.smooth ? ' checked' : '') + '></label></div>';
-  if (report) h += '<div class="pg">공용 시트 조회 · 문구 수정은 이 브라우저에 저장됩니다.</div>'; else if (ST.cur < TAB_DATA) {
-    h += '<div class="pg"><div class="pgt">이 슬라이드 데이터 (월별 값)</div><div class="hint">숫자를 바꾸면 표·그래프·문구가 함께 바뀝니다. 슬라이드의 글자는 화면에서 직접 클릭해 수정하세요.</div>' +
-      SLIDES[ST.cur].grids.map(gridHtml).join('') + '</div>';
+  if (ST.cur < TAB_DATA) {
+    h += '<div class="pg"><div class="pgt">이 슬라이드 가격 데이터</div><div class="hint">' + (report ? '공용 시트에서 가져온 가격입니다.' : '가격을 바꾸면 차트에 반영됩니다.') + '</div>' +
+      SLIDES[ST.cur].grids.filter(id=>G(id)).map(gridHtml).join('') + '</div>';
   } else h += '<div class="pg"><div class="hint">전체 데이터는 오른쪽 화면에서 수정합니다.</div></div>';
   p.innerHTML = h;
 }
@@ -2018,10 +2020,10 @@ function fitStage() {                                                           
   const s = wrap.firstElementChild;
   if (s) s.style.transform = 'scale(' + stageScale + ')';
 }
-function renderStage() { if(report && ST.cur >= TAB_DATA){ $("stage").innerHTML=sheetTable(); fitStage(); return; }
+function renderStage() { 
   const box = $('stage');
   if (ST.cur >= TAB_DATA) {                                                     // 데이터 탭
-    box.innerHTML = '<div id="datapage"><div class="dtop">전체 데이터 (위클리 보드 W45 수치 · 바꾸면 슬라이드에 연동)</div>' +
+    box.innerHTML = '<div id="datapage"><div class="dtop">' + (report ? '주차별 가격 이력 · '+esc(WEEK.endFull) : '첨부 W45 · 가격 데이터') + '</div>' +
       Object.keys(ST.data).map(gridHtml).join('') + '</div>';
     return;
   }
@@ -2173,108 +2175,169 @@ window.addEventListener('DOMContentLoaded', () => { try { init(); } catch (e) { 
 </script>
 <script>
 const ENDPOINT = 'https://script.google.com/macros/s/AKfycbyOpYG4_npcXd_7LvPd06IDPjV8HVCj3LyrbQPZh3FJE0KM1fC6YYbmPLzws9Rc7YsI/exec';
-const groups = [[], ['WTI'], ['Ethylene','Propylene','Benzene'], ['SM'], ['BD'], ['AN'], ['BPA'], ['MMA'], ['ABS','PC','EPS','PS','PBR'], ['미국 SM','미국 BD'], ['유럽 SM','유럽 BD']];
-const expected = groups.flat();
+const seedDates = WK10.map(s => '2026-' + s.split('/').map(x=>x.padStart(2,'0')).join('-'));
+const baseline = clone({week:WEEK, text:TXT, item:ITEM, reg:REG, dates:WK10, labels:WKW});
+const seedEnd = seedDates.at(-1);
+const archiveKey = 'weekly18.archive.v2.';
+let catalog = [];
 let report = null;
-const originalTab = SLIDES[0].tab;
-const display = value => value == null || value === '' ? '미등록' : String(value);
-function percent(row) {
-  const value = parseFloat(row?.change_pct);
-  return Number.isFinite(value) ? (value > 0 ? '+' : '') + value.toFixed(2) + '%' : '미등록';
+let activeDates = [];
+const groups = [[], ['WTI'], ['Ethylene','Propylene','Benzene'], ['SM'], ['BD'], ['AN'], ['BPA'], ['MMA'], ['ABS','PC','EPS','PS','PBR'], ['미국 SM','미국 BD'], ['유럽 SM','유럽 BD']];
+const names = groups.flat();
+function isoLabel(date) {
+  const d=new Date(date+'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate()+4-(d.getUTCDay()||7));
+  return 'W'+Math.ceil(((d-Date.UTC(d.getUTCFullYear(),0,1))/86400000+.5)/7);
 }
-function snippet(value) {
-  return display(value).split(/(?<=[다요음임])\.\s|\n/)[0].slice(0,170);
+function md(date){const [,m,d]=date.split('-');return Number(m)+'/'+Number(d);}
+function price(value){
+  const m=String(value??'').replace(/,/g,'').match(/[-+]?\d+(?:\.\d+)?/);
+  return m ? Number(m[0]) : null;
 }
-function liveSlide(index) {
-  const names = groups[index];
-  const title = index ? SLIDES[index].tab.slice(1).trim() : '18개 품목 주간 요약';
-  const els = header(title + '  ·  ' + report.week_end);
-  const rows = new Map(report.items.map(row => [row.item,row]));
-  const box = (key,x,y,w,h,title,body,tone) => els.push(pbox(key,x,y,w,h,'',title,null,[body],{tone,max:12,min:7}));
-  if (!index) {
-    expected.forEach((name,i) => {
-      const row = rows.get(name), delta = parseFloat(row?.change_pct);
-      els.push(kpiBox('item'+i,.23+(i%3)*3.22,.96+Math.floor(i/3)*.99,3.10,.89,name,display(row?.current_price),'000000','전주 대비 '+percent(row),dirColor(delta),dirTone(delta),15));
-    });
-  } else if (names.length === 1) {
-    const row = rows.get(names[0]) || {};
-    els.push(subMsg('benchmark',.85,display(row.benchmark),.43));
-    [['금주 평가가격',display(row.current_price)],['전주 평가가격',display(row.previous_price)],['주간 등락률',percent(row)]].forEach(([label,value],i)=>els.push(kpiBox('k'+i,.22+i*3.23,1.35,3.12,.8,label,value,null,'',null,i===2?'blue':'gray')));
-    const number = value => parseFloat(String(value??'').replace(/[$,]/g,''));
-    const points = [['전주',number(row.previous_price)]];
-    const daily = Array.isArray(row.daily_prices) ? row.daily_prices.filter(p=>p && Number.isFinite(number(p.value))) : [];
-    if (daily.length) daily.forEach(p=>points.push([String(p.date),number(p.value)]));
-    else points.push(['금주',number(row.current_price)]);
-    const valid=points.filter(p=>Number.isFinite(p[1]));
-    if(valid.length>=2) els.push(...priceChart('trend',.35,2.27,4.65,2.20,{vals:valid.map(p=>p[1]),cats:valid.map(p=>p[0]),daily:daily.length>0 && valid[0][0]==='전주',dec:'auto',compact:true}));
-    else box('nochart',.22,2.27,4.78,2.20,'가격 추이','비교할 가격이 부족합니다.','gray');
-    box('comment',5.12,2.27,4.7,2.20,'코멘터리',display(row.commentary),'mint');
-    box('factor',.22,4.60,4.78,2.47,'변동요인',display(row.factors),'sun');
-    box('outlook',5.12,4.60,4.7,2.47,'결론 및 전망',display(row.outlook),'peach');
-  } else {
-    const height=6.08/names.length;
-    names.forEach((name,i)=>{
-      const row=rows.get(name)||{}, y=.92+i*height;
-      els.push(kpiBox('price'+i,.22,y,2.5,height-.10,name,display(row.current_price),null,'전주 대비 '+percent(row),null,'blue',14));
-      box('cm'+i,2.84,y,3.44,height-.10,'코멘터리',snippet(row.commentary),'mint');
-      box('ol'+i,6.40,y,3.42,height-.10,'결론 및 전망',snippet(row.outlook),'peach');
-    });
+function windowDates(week,dates){
+  return [...new Set([...seedDates,...dates,week])].filter(d=>d<=week).sort().slice(-10);
+}
+function cachedDates(){
+  try{return Object.keys(localStorage).filter(k=>k.startsWith(archiveKey)).map(k=>k.slice(archiveKey.length));}catch{return [];}
+}
+function readArchive(date){return lsGet(archiveKey+date,null);}
+async function requestWeek(action,week){
+  const q=new URLSearchParams({action});
+  if(week)q.set('week',week);
+  const response=await fetch(ENDPOINT+'?'+q,{cache:'no-store',signal:AbortSignal.timeout(35000)});
+  if(!response.ok)throw Error('HTTP '+response.status);
+  const data=await response.json();
+  if(!data.success || (week && (!Array.isArray(data.items)||String(data.week_end).slice(0,10)!==week)))throw Error('시트 응답 오류');
+  return data;
+}
+function pricesFor(data){return Object.fromEntries(data.items.map(r=>[r.item,price(r.current_price)]));}
+async function assemble(week){
+  const dates=windowDates(week,catalog);
+  const data=await requestWeek('load',week);
+  const history={};
+  const pending=dates.filter(d=>d!==week);
+  async function worker(){
+    while(pending.length){
+      const d=pending.shift(), seed=seedDates.indexOf(d);
+      if(seed>=0 && !catalog.includes(d)){history[d]=Object.fromEntries(names.map(k=>[k,SERIES_DEFAULT[k][seed]]));continue;}
+      const stored=pricesFor(await requestWeek('load',d)); history[d]=Object.fromEntries(names.map(k=>[k,stored[k]??(seed>=0?SERIES_DEFAULT[k][seed]:null)]));
+    }
   }
-  els.push(noteLine('source','출처  ·  Petrochemical Weekly Board 공용 시트  |  '+report.week_end));
+  await Promise.all([worker(),worker(),worker()]);
+  history[week]=pricesFor(data);
+  return {data,history,dates};
+}
+function restoreTemplate(){
+  Object.assign(WEEK,clone(baseline.week)); Object.assign(TXT,clone(baseline.text));
+  Object.assign(ITEM,clone(baseline.item)); Object.assign(REG,clone(baseline.reg));
+  WK10.splice(0,WK10.length,...baseline.dates);WKW.splice(0,WKW.length,...baseline.labels);
+  loadData();
+}
+function showArchive(entry){
+  report=null;restoreTemplate();
+  if(entry){
+    const {data,dates,history}=entry;
+    report=data;activeDates=dates;
+    ST.data=clone(DATA_DEFAULT);
+    const week=data.week_end.slice(0,10);
+    Object.assign(WEEK,{label:isoLabel(week),endFull:week,end:md(week)});
+    WK10.splice(0,WK10.length,...dates.map(md));WKW.splice(0,WKW.length,...dates.map(isoLabel));
+    for(const k of names){
+      const row=data.items.find(r=>r.item===k)||{};
+      const grid=G('w_'+gid(k));
+      grid.cols=dates.map(md);grid.rows[0].v=dates.map(d=>history[d]?.[k]??null);
+      grid.note=dates[0]+' ~ '+week+' · 주간 평가가격';
+      const dayGrid=G('d_'+gid(k));
+      if(dayGrid){
+        const daily=(Array.isArray(row.daily_prices)?row.daily_prices:[]).filter(p=>p && price(p.value)!==null);
+        dayGrid.cols=['전주',...daily.map(p=>String(p.date))];
+        dayGrid.rows[0].v=[price(row.previous_price),...daily.map(p=>price(p.value))];
+        if(!daily.length || daily.at(-1).date!==md(week) && price(daily.at(-1).value)!==price(row.current_price)){
+          dayGrid.cols.push('금주');dayGrid.rows[0].v.push(price(row.current_price));
+        }
+        dayGrid.note='전주 비교가격 및 선택한 주차의 일별 평가가격';
+      }
+      if(week!==seedEnd){
+        const lines=v=>String(v||'미등록').split(/\n/).filter(Boolean);
+        TXT[k]={cm:row.commentary||'미등록',sm:firstSent(row.commentary||'미등록'),ol:row.outlook||'미등록',fa:lines(row.factors),ad:lines(row.additional_info),ai:row.ai_outlook||'미등록',tag:''};
+        if(ITEM[k])Object.assign(ITEM[k],{label:k,bm:row.benchmark||k,ptag:'공용 시트',tail1:'',m2:[R(firstSent(row.outlook||'전망 미등록'))],note:'※ 공용 시트 · '+week});
+        if(REG[k])REG[k].bm=row.benchmark||k;
+      }
+    }
+    if(week!==seedEnd)delete ST.data.gk;
+  }
+  ST.texts=lsGet('weekly18.texts',{})||{};
+  $('bData').hidden=!!entry;
+  gotoTab(ST.cur);
+}
+function currentRow(k){return report?.items.find(r=>r.item===k)||{};}
+function livePcts(k){
+  const r=currentRow(k),prev=price(r.previous_price),cur=price(r.current_price);
+  if(prev===null||cur===null)return {prev,cur,chg:NaN,pct:NaN};
+  return {prev,cur,chg:cur-prev,pct:prev?(cur-prev)/prev*100:NaN};
+}
+function weekReview(){
+  const els=header('전망 AS · 5대 주원료 점검 · '+WEEK.label+' ('+WEEK.end+')');
+  els.push(subMsg('m1',.83,'□ 전주 대비 가격 변화와 다음 주 점검 사항',.48));
+  ['SM','AN','BD','BPA','MMA'].forEach((k,i)=>{
+    const r=currentRow(k),y=1.42+i*1.14;
+    els.push(kpiBox('as.i'+i,.22,y,1.78,1.06,k,r.current_price||'미등록',null,'전주 '+(r.previous_price||'미등록'),null,'blue',12));
+    els.push(pbox('as.b'+i,2.07,y,4.42,1.06,'','이번 주 시황',null,[firstSent(r.commentary||'미등록')],{tone:'mint'}));
+    els.push(pbox('as.n'+i,6.56,y,3.26,1.06,'','다음 주 점검',null,[firstSent(r.outlook||'미등록')],{tone:'sun'}));
+  });
   return els;
 }
-function sheetTable() {
-  return '<div id="datapage"><div class="dtop">공용 시트 · '+esc(report.week_end)+'</div><table><thead><tr><th>품목</th><th>금주</th><th>전주</th><th>등락률</th></tr></thead><tbody>'+expected.map(name=>{
-    const row=report.items.find(r=>r.item===name)||{};
-    return '<tr>'+[name,row.current_price,row.previous_price,percent(row)].map(value=>'<td>'+esc(display(value))+'</td>').join('')+'</tr>';
-  }).join('')+'</tbody></table></div>';
+function originalSlide(index){
+  if(!report)return SLIDES[index].fn();
+  const sameWeek=WEEK.endFull===seedEnd;
+  if(index===0){
+    const original=sameWeek&&AS_ROWS.every(a=>Math.abs(livePcts(a.n).pct-a.pct)<.011);
+    return original?buildAS():weekReview();
+  }
+  const keys=groups[index], els=SLIDES[index].fn();
+  if(!sameWeek || keys.some(k=>livePcts(k).cur!==SERIES_DEFAULT[k].at(-1)||livePcts(k).prev!==SERIES_DEFAULT[k].at(-2))){
+    const first=keys.map(k=>{const r=currentRow(k);return k+' '+(r.current_price||'미등록')+' ('+(r.change_pct==null?'—':r.change_pct+'%')+')';}).join(' · ');
+    const idx=els.findIndex(e=>e.id==='m1');
+    els[idx]=subMsg('m1',.79,[[R('□ '+first)],[R('□ '+firstSent(currentRow(keys[0]).outlook||'전망 미등록').slice(0,96))]],.56,{size:11});
+    els[els.length-1]=noteLine('f','※ 공용 시트 · '+WEEK.endFull+' · 주간 이력 '+activeDates[0]+' ~ '+activeDates.at(-1));
+  }
+  return els;
 }
-async function getSheet(action,week) {
-  const query=new URLSearchParams({action});
-  if(week) query.set('week',week);
-  const response=await fetch(ENDPOINT+'?'+query,{cache:'no-store',signal:AbortSignal.timeout(35000)});
-  if(!response.ok) throw Error('HTTP '+response.status);
-  const result=await response.json();
-  if(!result.success) throw Error('시트 조회 실패');
-  return result;
+function options(selected){
+  const dates=[...new Set([...catalog,...cachedDates()])].sort().reverse();
+  const sel=$('weekSource');
+  sel.replaceChildren(new Option('첨부 W45 원본',''),...dates.map(d=>new Option(d+' · '+isoLabel(d),d)));
+  sel.value=selected||'';
 }
-function showSource(next) {
-  report=next;
-  SLIDES[0].tab=next?'① 주간 요약':originalTab;
-  $('bData').hidden=!!next;
-  ST.texts=lsGet('weekly18.texts',{})||{};
-  gotoTab(Math.min(ST.cur,TAB_DATA));
-}
-async function synchronize(refreshList) {
-  const select=$('weekSource'), status=$('sheetStatus');
-  select.disabled=$('sheetRefresh').disabled=true;
-  const previous=report?.week_end||'';
+async function synchronize(refresh){
+  const sel=$('weekSource'), status=$('sheetStatus'), prior=report?.week_end||'';
+  let week=sel.value;
+  sel.disabled=$('sheetRefresh').disabled=true;
   try {
-    status.textContent='공용 시트 조회 중…';
-    if(refreshList){
-      const {weeks}=await getSheet('weeks');
-      const dates=[...new Set(weeks.map(w=>String(w.week_end||w).slice(0,10)).filter(w=>/^\d{4}-\d\d-\d\d$/.test(w)))].sort().reverse();
-      select.replaceChildren(new Option('첨부 W45 원본',''),...dates.map(w=>new Option(w,w)));
-      select.value=dates.includes(previous)?previous:(dates[0]||'');
-      if(!dates.length){showSource(null);status.textContent='저장된 주차 없음 · 첨부 W45 표시';return;}
+    status.textContent='주차별 아카이브 조회 중…';
+    if(refresh){
+      const data=await requestWeek('weeks');
+      catalog=[...new Set(data.weeks.map(w=>String(w.week_end||w).slice(0,10)).filter(w=>/^\d{4}-\d\d-\d\d$/.test(w)))].sort();
+      week=week||catalog.at(-1)||'';options(week);
     }
-    const week=select.value;
-    if(!week){showSource(null);status.textContent='첨부 W45 원본';return;}
-    const next=await getSheet('load',week);
-    if(!Array.isArray(next.items)||String(next.week_end).slice(0,10)!==week) throw Error('주차 데이터 불일치');
-    showSource(next);
-    status.textContent='공용 시트 · '+expected.filter(n=>next.items.some(r=>r.item===n)).length+'/18품목';
-  } catch(error) {
-    if(previous&&!Array.from(select.options).some(o=>o.value===previous))select.add(new Option(previous,previous));
-    select.value=previous;
-    status.textContent='조회 실패 · '+(previous||'첨부 W45')+' 표시 중';
-  } finally {select.disabled=$('sheetRefresh').disabled=false;}
+    if(!week){showArchive(null);status.textContent='첨부 W45 원본';return;}
+    const entry=await assemble(week);
+    showArchive(entry);
+    let saved=true;
+    try{localStorage.setItem(archiveKey+week,JSON.stringify(entry));}catch{saved=false;}
+    status.textContent='공용 시트 · '+WEEK.label+(saved?' · 이 기기에 보관됨':' · 기기 저장 공간 부족');
+  } catch{
+    week=week||cachedDates().sort().at(-1);
+    const entry=week&&readArchive(week);
+    if(entry){showArchive(entry);options(week);status.textContent='보관본 · '+week+' · 실시간 조회 실패';}
+    else{options(prior);status.textContent='조회 실패 · '+(prior||'첨부 W45 원본')+' 표시 중';}
+  } finally{sel.disabled=$('sheetRefresh').disabled=false;}
 }
 window.addEventListener('DOMContentLoaded',()=>{
-  $('sheetRefresh').onclick=()=>synchronize(true);
+  options('');$('sheetRefresh').onclick=()=>synchronize(true);
   $('weekSource').onchange=()=>synchronize(false);
   synchronize(true);
 });
 
-</script></body>
-</html>
+</script></body></html>
+
