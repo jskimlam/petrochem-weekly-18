@@ -1,0 +1,25 @@
+{
+  "name": "LAM REPORT · 석유화학 18품목 위클리",
+  "short_name": "LAM REPORT",
+  "description": "18개 품목 주간 석유화학 시장 보고서",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#071E45",
+  "theme_color": "#09244C",
+  "icons": [
+    {
+      "src": "./assets/lam-report-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/lam-report-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
