@@ -2300,6 +2300,43 @@ async function assemble(week){
   history[week]=pricesFor(data);
   return {data,history,dates};
 }
+
+/* 과거 주차 원문 복원: 공용 GAS 응답의 누락된 해설 필드를
+   같은 Google Sheet weekly_data에서 추출한 정적 원문으로 채운다.
+   가격·평가일·benchmark 및 이미 등록된 편집 문장은 변경하지 않는다. */
+let HISTORICAL_CONTENT_PROMISE=null;
+function historicalContent(){
+  if(!HISTORICAL_CONTENT_PROMISE){
+    HISTORICAL_CONTENT_PROMISE=fetch('./data/weekly_content_archive.json?v=20261108',{cache:'no-store'})
+      .then(r=>{if(!r.ok)throw Error('Historical archive '+r.status);return r.json();})
+      .catch(e=>{console.warn('과거 시황 원문 복원 실패',e);return {by_week:{}};});
+  }
+  return HISTORICAL_CONTENT_PROMISE;
+}
+function isMissingHistoricalText(value){
+  if(value===null||value===undefined)return true;
+  if(Array.isArray(value))return value.length===0;
+  const v=String(value).trim();
+  return !v||['미등록','[]','null','undefined','원문 미제공'].includes(v);
+}
+async function enrichHistoricalMarketText(entry){
+  if(!entry?.data?.items||!Array.isArray(entry.data.items))return 0;
+  const archive=await historicalContent(),week=String(entry.data.week_end||'').slice(0,10);
+  const rows=archive.by_week?.[week];if(!rows)return 0;
+  let filled=0;
+  for(const item of entry.data.items){
+    const from=rows[item.item];if(!from)continue;
+    for(const key of ['factors','additional_info','ai_outlook']){
+      if(!isMissingHistoricalText(item[key])||isMissingHistoricalText(from[key]))continue;
+      item[key]=from[key];filled++;
+    }
+  }
+  return filled;
+}
+function historicalBulletLines(value){
+  if(Array.isArray(value))return value.map(v=>String(v).trim().replace(/^[-*•]\s*/, '')).filter(Boolean);
+  return String(value||'').split(/\n/).map(v=>v.trim().replace(/^[-*•]\s*/, '')).filter(Boolean);
+}
 function restoreTemplate(){
   Object.assign(WEEK,clone(baseline.week)); Object.assign(TXT,clone(baseline.text));
   Object.assign(ITEM,clone(baseline.item)); Object.assign(REG,clone(baseline.reg));
@@ -2331,8 +2368,8 @@ function showArchive(entry){
         dayGrid.note='전주 비교가격 및 선택한 주차의 일별 평가가격';
       }
       if(week!==seedEnd){
-        const lines=v=>String(v||'미등록').split(/\n/).filter(Boolean);
-        TXT[k]={cm:row.commentary||'미등록',sm:firstSent(row.commentary||'미등록'),ol:row.outlook||'미등록',fa:lines(row.factors),ad:lines(row.additional_info),ai:row.ai_outlook||'미등록',tag:''};
+        const lines=historicalBulletLines;
+        TXT[k]={cm:row.commentary||'미등록',sm:firstSent(row.commentary||'미등록'),ol:row.outlook||'미등록',fa:lines(row.factors),ad:lines(row.additional_info),ai:row.ai_outlook||'해당 주차 AI 전망 원문 미제공',tag:''};
         if(ITEM[k])Object.assign(ITEM[k],{label:k,bm:row.benchmark||k,ptag:'공용 시트',tail1:'',m2:[R(firstSent(row.outlook||'전망 미등록'))],note:'※ 공용 시트 · '+week});
         if(REG[k])REG[k].bm=row.benchmark||k;
       }
@@ -2395,14 +2432,15 @@ async function synchronize(refresh){
     }
     if(!week){showArchive(null);status.textContent='첨부 W45 원본';return;}
     const entry=await assemble(week);
+    const recovered=await enrichHistoricalMarketText(entry);
     showArchive(entry);
     let saved=true;
     try{localStorage.setItem(archiveKey+week,JSON.stringify(entry));}catch{saved=false;}
-    status.textContent='공용 시트 · '+WEEK.label+(saved?' · 이 기기에 보관됨':' · 기기 저장 공간 부족');
+    status.textContent='공용 시트 · '+WEEK.label+(recovered?' · 원문 '+recovered+'개 복원':'')+(saved?' · 이 기기에 보관됨':' · 기기 저장 공간 부족');
   } catch{
     week=week||cachedDates().sort().at(-1);
     const entry=week&&readArchive(week);
-    if(entry){showArchive(entry);options(week);status.textContent='보관본 · '+week+' · 실시간 조회 실패';}
+    if(entry){await enrichHistoricalMarketText(entry);showArchive(entry);options(week);status.textContent='보관본 · '+week+' · 실시간 조회 실패';}
     else{options(prior);status.textContent='조회 실패 · '+(prior||'첨부 W45 원본')+' 표시 중';}
   } finally{sel.disabled=$('sheetRefresh').disabled=false;}
 }
