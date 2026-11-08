@@ -1632,6 +1632,7 @@ function renderSlideDom(i) {
       else if (el.k === 'chart') root.appendChild(domChart(el));
     } catch (e) { console.error('요소를 그리지 못했습니다: ' + (el.id || el.k) + ' / ' + e.message); }   // 한 요소 오류가 전체를 막지 않도록
   });
+  if (!ADMIN_EDIT_MODE) root.querySelectorAll('[contenteditable]').forEach(n=>{n.removeAttribute('contenteditable');n.classList.remove('ed')});
   return root;
 }
 
@@ -1988,6 +1989,25 @@ async function savePptx(indices) {                                              
 const TAB_DATA = SLIDES.length;                                                 // 데이터 탭 번호(슬라이드 수와 같음)
 const $ = id => document.getElementById(id);                                    // 짧은 선택자
 
+let ADMIN_EDIT_MODE = false;                                                    // 새로 열면 항상 발표 모드
+function updateViewerNavigation() {
+  const counter = $('viewCounter');
+  if (counter) counter.textContent = '슬라이드 '+(Math.min(ST.cur,SLIDES.length-1)+1)+' / '+SLIDES.length;
+  const prev=$('bViewPrev'), next=$('bViewNext');
+  if (prev) prev.disabled=ST.cur<=0;
+  if (next) next.disabled=ST.cur>=SLIDES.length-1;
+}
+function setAdminEditMode(enabled) {
+  ADMIN_EDIT_MODE=!!enabled;
+  if (!ADMIN_EDIT_MODE && ST.cur>=TAB_DATA) ST.cur=0;
+  document.body.classList.toggle('presentation-view',!ADMIN_EDIT_MODE);
+  const button=$('bAdminMode');
+  button.textContent=ADMIN_EDIT_MODE?'✓ 편집 중 · 발표로':'⚙ 관리자 모드';
+  button.setAttribute('aria-pressed',String(ADMIN_EDIT_MODE));
+  renderTabs();renderPanel();renderStage();updateViewerNavigation();
+}
+
+
 // ---- 알림 -------------------------------------------------------------------
 let toastTimer = null;
 function toast(msg, isErr) {                                                    // 화면 아래 알림(한글)
@@ -2019,6 +2039,7 @@ function colorRow(label, key) {                                                 
 }
 function renderPanel() {
   const p = $('panel');
+  if (!ADMIN_EDIT_MODE) {p.replaceChildren();return;}
   let h = '<div class="pg"><div class="pgt">스타일</div>' + colorRow('기본색(블랙)', 'main') + colorRow('비교선·참고(블루)', 'sub') + colorRow('경고·하락(레드)', 'red') +
     '<label class="row"><span>선 부드럽게(곡선)</span><input type="checkbox" id="smooth"' + (ST.style.smooth ? ' checked' : '') + '></label></div>';
   if (ST.cur < TAB_DATA) {
@@ -2032,6 +2053,15 @@ function renderPanel() {
 let stageScale = 1;
 function fitStage() {                                                           // 화면에 맞춰 슬라이드 축소(좁은 화면은 전체가 한눈에 보이도록)
   const box = $('stage'), wrap = $('slidewrap'), panel = $('panel');
+  if (!ADMIN_EDIT_MODE) {
+    box.style.height='';box.style.flex='1 1 auto';panel.style.display='none';
+    if (!wrap) return;
+    const w=Math.max(100,box.clientWidth-24),h=Math.max(100,box.clientHeight-24);
+    stageScale=Math.max(0.12,Math.min(1.8,w/CW,h/CH));
+    wrap.style.width=Math.round(CW*stageScale)+'px';wrap.style.height=Math.round(CH*stageScale)+'px';
+    const slide=wrap.firstElementChild;if(slide)slide.style.transform='scale('+stageScale+')';
+    return;
+  }
   const compact = window.matchMedia('(max-width:1099px)').matches;             // 폴드 메인·태블릿·휴대폰
   const narrow = window.matchMedia('(max-width:599px)').matches;               // 폴드 커버·휴대폰 세로(상하 배치)
   box.style.height = ''; box.style.flex = '';
@@ -2050,6 +2080,7 @@ function fitStage() {                                                           
 }
 function renderStage() { 
   const box = $('stage');
+  if (!ADMIN_EDIT_MODE && ST.cur>=TAB_DATA) ST.cur=0;
   if (ST.cur >= TAB_DATA) {                                                     // 데이터 탭
     box.innerHTML = '<div id="datapage"><div class="dtop">' + (report ? '주차별 가격 이력 · '+esc(WEEK.endFull) : '첨부 W45 · 가격 데이터') + '</div>' +
       Object.keys(ST.data).map(gridHtml).join('') + '</div>';
@@ -2074,12 +2105,14 @@ function renderTabs() {
     '<button class="tab data' + (ST.cur === TAB_DATA ? ' on' : '') + '" data-i="' + TAB_DATA + '">데이터</button>';
 }
 function gotoTab(i) {
+  if (!ADMIN_EDIT_MODE && i>=TAB_DATA) return;
   ST.cur = i; lsSet('weekly18.cur', i);
-  renderTabs(); renderPanel(); renderStage();
+  renderTabs(); renderPanel(); renderStage(); updateViewerNavigation();
 }
 
 // ---- 문구 수정 저장 -------------------------------------------------------------
 function commitEdit(node) {
+  if (!ADMIN_EDIT_MODE) return;
   const key = node.dataset.key;
   const txt = node.innerText.replace(/\r/g, '').replace(/\n+$/, '');            // 줄바꿈 정리
   if (txt === node.dataset.orig) delete ST.texts[key]; else ST.texts[key] = txt;   // 원본과 같으면 수정본 삭제
@@ -2090,6 +2123,7 @@ function commitEdit(node) {
 function bindEvents() {
   $('tabs').addEventListener('click', e => { const b = e.target.closest('.tab'); if (b) gotoTab(+b.dataset.i); });
   document.addEventListener('input', e => {                                     // 숫자·색상 입력
+    if (!ADMIN_EDIT_MODE) return;
     const t = e.target;
     if (t.matches && t.matches('input[data-g]')) {
       const v = t.value === '' ? null : parseFloat(t.value);
@@ -2099,8 +2133,9 @@ function bindEvents() {
       ST.style[t.dataset.style] = t.value.slice(1).toUpperCase(); lsSet('weekly18.style', ST.style); refresh(false);
     } else if (t.id === 'smooth') { ST.style.smooth = t.checked; lsSet('weekly18.style', ST.style); refresh(true); }
   });
-  $('stage').addEventListener('focusout', e => { if (e.target.classList && e.target.classList.contains('ed')) commitEdit(e.target); });   // 문구 수정 확정
+  $('stage').addEventListener('focusout', e => { if (ADMIN_EDIT_MODE && e.target.classList && e.target.classList.contains('ed')) commitEdit(e.target); });   // 문구 수정 확정
   $('stage').addEventListener('paste', e => {                                   // 붙여넣기는 글자만
+    if (!ADMIN_EDIT_MODE) return;
     if (e.target.classList && e.target.classList.contains('ed')) { e.preventDefault(); document.execCommand('insertText', false, (e.clipboardData || window.clipboardData).getData('text')); }
   });
   window.addEventListener('resize', fitStage);
@@ -2112,6 +2147,15 @@ function bindEvents() {
   $('bAllPpt').onclick = () => guard('PPT 전체 저장', () => savePptx(SLIDES.map((s, i) => i)));
   $('bReset').onclick = () => { ST.texts = {}; lsSet('weekly18.texts', ST.texts); refresh(true); toast('문구를 원래대로 되돌렸습니다'); };
   $('bData').onclick = () => { resetData(); saveData(); renderPanel(); refresh(true); toast('데이터를 원래 값으로 되돌렸습니다'); };
+  $('bAdminMode').onclick=()=>setAdminEditMode(!ADMIN_EDIT_MODE);
+  $('bViewPrev').onclick=()=>gotoTab(Math.max(0,ST.cur-1));
+  $('bViewNext').onclick=()=>gotoTab(Math.min(SLIDES.length-1,ST.cur+1));
+  document.addEventListener('keydown',e=>{
+    if (ADMIN_EDIT_MODE || showOn || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.target && e.target.closest && e.target.closest('input,textarea,select,[contenteditable]')) return;
+    if (e.key==='ArrowRight' || e.key==='PageDown') {gotoTab(Math.min(SLIDES.length-1,ST.cur+1));e.preventDefault();}
+    else if (e.key==='ArrowLeft' || e.key==='PageUp') {gotoTab(Math.max(0,ST.cur-1));e.preventDefault();}
+  });
 }
 
 // ---- 발표 보기 : 슬라이드 한 장을 화면에 맞춰 꽉 채워 보여준다 (←/→·스페이스·클릭·스와이프로 넘김, Esc 종료) ----
@@ -2194,8 +2238,9 @@ function init() {
   const st = lsGet('weekly18.style', null); if (st) Object.assign(ST.style, st);   // 저장된 스타일
   ST.texts = lsGet('weekly18.texts', {}) || {};                                    // 저장된 문구 수정본
   ST.cur = Math.min(Math.max(+lsGet('weekly18.cur', 0) || 0, 0), TAB_DATA);        // 마지막 탭
+  if (!ADMIN_EDIT_MODE && ST.cur>=TAB_DATA) ST.cur=0;
   bindEvents(); bindShow();
-  renderTabs(); renderPanel(); renderStage();
+  renderTabs(); renderPanel(); renderStage(); updateViewerNavigation();
   window.ABS = { ST: ST, SLIDES: SLIDES, buildSlide: buildSlide, renderSlideDom: renderSlideDom, buildPptxBlob: buildPptxBlob, slideToPngBytes: slideToPngBytes, gotoTab: gotoTab, resetData: resetData };   // 검증용 접근점
 }
 window.addEventListener('DOMContentLoaded', () => { try { init(); } catch (e) { console.error('화면을 시작하지 못했습니다: ' + e.message); document.body.insertAdjacentHTML('afterbegin', '<div style="padding:20px;color:#c00">화면을 시작하지 못했습니다: ' + esc(e.message) + '</div>'); } });
