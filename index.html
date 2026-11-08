@@ -2111,12 +2111,17 @@ function gotoTab(i) {
 }
 
 // ---- 문구 수정 저장 -------------------------------------------------------------
+function activeWeeklyTextStorageKey() {
+  // 과거 주차에서 수정한 텍스트가 다른 주차의 본문을 덮지 않게 분리 저장.
+  // 첨부 원본(주차 미선택)은 기존 키를 보존하여 과거 편집 내용과 호환.
+  return report?.week_end ? 'weekly18.texts.'+String(report.week_end).slice(0,10) : 'weekly18.texts';
+}
 function commitEdit(node) {
   if (!ADMIN_EDIT_MODE) return;
   const key = node.dataset.key;
   const txt = node.innerText.replace(/\r/g, '').replace(/\n+$/, '');            // 줄바꿈 정리
   if (txt === node.dataset.orig) delete ST.texts[key]; else ST.texts[key] = txt;   // 원본과 같으면 수정본 삭제
-  lsSet('weekly18.texts', ST.texts);
+  lsSet(activeWeeklyTextStorageKey(), ST.texts);
 }
 
 // ---- 시작 ------------------------------------------------------------------
@@ -2145,7 +2150,7 @@ function bindEvents() {
   $('bAllPng').onclick = () => guard('PNG 전체 저장', () => saveAllPng(dpi(), i => toast('PNG 전체 저장 ' + (i + 1) + '/' + SLIDES.length + ' …')));
   $('bPpt').onclick = () => guard('PPT 저장(현재 슬라이드)', () => savePptx([Math.min(ST.cur, SLIDES.length - 1)]));
   $('bAllPpt').onclick = () => guard('PPT 전체 저장', () => savePptx(SLIDES.map((s, i) => i)));
-  $('bReset').onclick = () => { ST.texts = {}; lsSet('weekly18.texts', ST.texts); refresh(true); toast('문구를 원래대로 되돌렸습니다'); };
+  $('bReset').onclick = () => { ST.texts = {}; lsSet(activeWeeklyTextStorageKey(), ST.texts); refresh(true); toast('선택 주차의 문구를 원래대로 되돌렸습니다'); };
   $('bData').onclick = () => { resetData(); saveData(); renderPanel(); refresh(true); toast('데이터를 원래 값으로 되돌렸습니다'); };
   $('bAdminMode').onclick=()=>setAdminEditMode(!ADMIN_EDIT_MODE);
   $('bViewPrev').onclick=()=>gotoTab(Math.max(0,ST.cur-1));
@@ -2376,7 +2381,7 @@ function showArchive(entry){
     }
     if(week!==seedEnd)delete ST.data.gk;
   }
-  ST.texts=lsGet('weekly18.texts',{})||{};
+  ST.texts=lsGet(activeWeeklyTextStorageKey(),{})||{};
   $('bData').hidden=!!entry;
   gotoTab(ST.cur);
 }
