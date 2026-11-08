@@ -109,23 +109,39 @@ button, select { touch-action:manipulation; }
 #showtip { position:absolute; left:0; right:0; bottom:58px; text-align:center; color:#ddd; font-size:12px; transition:opacity .25s; }
 #show.idle #showtip { opacity:0; }
 @media (max-width: 599px) { #show button { padding:9px 16px; } }
+
+/* 기본 발표 보기 / 관리자 편집 보기 */
+body.presentation-view #panel {display:none!important;}
+body.presentation-view #main {flex-direction:row!important;}
+body.presentation-view #stage {order:1; width:100%; flex:1 1 auto; min-height:0; display:flex; align-items:center; justify-content:center; padding:clamp(6px,1.5vw,22px);}
+body.presentation-view #top .admin-only {display:none!important;}
+body.presentation-view #tabs .tab.data {display:none!important;}
+body.presentation-view #slidewrap .ed {outline:none!important;cursor:default;}
+#bAdminMode {border-color:#315b89;font-weight:700;white-space:nowrap;}
+body:not(.presentation-view) #bAdminMode {background:#f0f4fc;color:#163a62;}
+#viewerNav {display:flex;justify-content:center;align-items:center;gap:12px;padding:7px 12px;background:#f6f9ff;border-bottom:1px solid var(--line);}
+#viewerNav button {min-width:78px;}
+#viewCounter {font-variant-numeric:tabular-nums;min-width:105px;text-align:center;font-weight:700;color:var(--navy);}
+body:not(.presentation-view) #viewerNav {display:none;}
+@media(max-width:599px){body.presentation-view #main {flex-direction:row!important;} body.presentation-view #stage {min-height:0;flex:1 1 auto;} #viewerNav {padding:5px 8px;gap:8px;} #viewerNav button {padding:6px 10px;}}
 </style>
 </head>
-<body>
+<body class="presentation-view">
 <div id="top">
   <h1><img src="./assets/lam-report-icon-64.png" alt="LAM REPORT" width="28" height="28" style="vertical-align:middle;border-radius:6px;margin-right:7px;">18개 품목 석유화학 위클리<small>회사 용지 25.517 × 19.05 cm · 표/그래프는 PPT 개체로 저장</small></h1>
   <span class="sp"></span>
-  <button id="bShow" class="pri">▶ 발표 보기</button>
-  <button id="bPpt" class="pri">PPT 저장(현재)</button>
-  <button id="bAllPpt" class="pri">PPT 전체 저장</button>
-  <select id="dpi" title="PNG 해상도"><option value="150">PNG 150dpi (1507×1125)</option><option value="200" selected>PNG 200dpi (2009×1500)</option><option value="300">PNG 300dpi (3014×2250)</option></select>
-  <button id="bPng">PNG 저장</button>
-  <button id="bCopy">이미지 복사</button>
-  <button id="bAllPng">PNG 전체 저장(ZIP)</button>
-  <button id="bReset">문구 원래대로</button>
-  <button id="bData">데이터 원래대로</button>
+  <button id="bAdminMode" type="button" aria-pressed="false" title="기존 데이터·문구·스타일 편집 도구 열기">⚙ 관리자 모드</button>
+  <button id="bShow" class="pri">▶ 전체화면 발표</button>
+  <button id="bPpt" class="pri admin-only">PPT 저장(현재)</button>
+  <button id="bAllPpt" class="pri admin-only">PPT 전체 저장</button>
+  <select id="dpi" class="admin-only" title="PNG 해상도"><option value="150">PNG 150dpi (1507×1125)</option><option value="200" selected>PNG 200dpi (2009×1500)</option><option value="300">PNG 300dpi (3014×2250)</option></select>
+  <button id="bPng" class="admin-only">PNG 저장</button>
+  <button id="bCopy" class="admin-only">이미지 복사</button>
+  <button id="bAllPng" class="admin-only">PNG 전체 저장(ZIP)</button>
+  <button id="bReset" class="admin-only">문구 원래대로</button>
+  <button id="bData" class="admin-only">데이터 원래대로</button>
 </div>
-<div style="display:flex;align-items:center;gap:10px;padding:5px 12px;background:#edf2f8;font:13px sans-serif;flex-wrap:wrap"><label>주차별 아카이브 <select id="weekSource"><option value="">첨부 W45 원본</option></select></label><button id="sheetRefresh">시트 새로고침</button><span role="status" id="sheetStatus">첨부 W45 원본</span></div><div id="tabs"></div>
+<div style="display:flex;align-items:center;gap:10px;padding:5px 12px;background:#edf2f8;font:13px sans-serif;flex-wrap:wrap"><label>주차별 아카이브 <select id="weekSource"><option value="">첨부 W45 원본</option></select></label><button id="sheetRefresh">시트 새로고침</button><span role="status" id="sheetStatus">첨부 W45 원본</span></div><div id="viewerNav" aria-label="슬라이드 이동"><button id="bViewPrev" type="button">◀ 이전</button><span id="viewCounter" role="status" aria-live="polite">슬라이드 1 / 1</span><button id="bViewNext" type="button">다음 ▶</button></div><div id="tabs"></div>
 <div id="main"><aside id="panel"></aside><section id="stage"></section></div>
 <div id="show"><div id="showwrap"></div><div id="showtop"><button id="showfs" title="전체 화면 켜기/끄기">전체화면</button><button id="showx" title="발표 종료 (Esc)">✕ 닫기</button></div><div id="showtip"></div><div id="showhud"><button id="showprev">◀ 이전</button><span id="showcnt"></span><button id="shownext">다음 ▶</button></div></div>
 <div id="toast"></div>
