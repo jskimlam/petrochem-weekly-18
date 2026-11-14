@@ -2668,7 +2668,7 @@ function livePcts(k){
 }
 /* ---- 전망 AS(적중 점검) : 전주 AI 전망 방향 vs 이번 주 실제 가격 방향 ---- */
 let prevAi=null;                                                                   // {week, prevWeek, tags:{품목:'상승'|'하락'|'보합'}} (전주 AI 전망 방향)
-function dirOf(prev,cur){                                                          // 가격 방향 : 같으면 보합, 조금이라도 오르면 상승·내리면 하락
+function asDir(prev,cur){                                                          // 가격 방향 : 같으면 보합, 조금이라도 오르면 상승·내리면 하락
   if(prev===null||cur===null)return '';
   const a=Math.round(prev*10000),b=Math.round(cur*10000);                          // 부동소수 오차 제거
   return b>a?'상승':(b<a?'하락':'보합');
@@ -2697,7 +2697,7 @@ async function loadPrevAi(week){                                                
 function asJudgeAll(){                                                             // 18개 품목 전체 판정(화면에는 5개만, 나머지는 기록용)
   return names.map(k=>{
     const r=currentRow(k),p=price(r.previous_price),c=price(r.current_price);
-    const f=(prevAi&&prevAi.tags[k])||'',a=dirOf(p,c);
+    const f=(prevAi&&prevAi.tags[k])||'',a=asDir(p,c);
     return {item:k,forecast:f,actual:a,prev:p,cur:c,pct:(p&&c!==null)?(c-p)/p*100:NaN,hit:(f&&a)?f===a:null};
   });
 }
