@@ -164,6 +164,7 @@ body:not(.presentation-view) #viewerNav {display:none;}
   <button id="bAdminMode" type="button" aria-pressed="false" title="기존 데이터·문구·스타일 편집 도구 열기">⚙ 관리자 모드</button>
   <button id="bShow" class="pri">▶ 전체화면 발표</button>
   <button id="bPptMenu" class="pri" type="button" title="현재 쪽 / 선택 쪽 / 전체 / 쪽별 개별 파일로 PPT 저장">PPT 저장 ▾</button>
+  <button id="bPdfAll" type="button" title="전체 슬라이드를 PDF 한 파일로 저장 (회사 용지 25.517 × 19.05 cm)">PDF 전체 저장</button>
   <select id="dpi" class="admin-only" title="PNG 해상도"><option value="150">PNG 150dpi (1507×1125)</option><option value="200" selected>PNG 200dpi (2009×1500)</option><option value="300">PNG 300dpi (3014×2250)</option></select>
   <button id="bPng" class="admin-only">PNG 저장</button>
   <button id="bCopy" class="admin-only">이미지 복사</button>
@@ -2088,6 +2089,55 @@ async function savePptx(indices, scope, separate) {                             
   } catch (e) { throw pptStageError(e); }
 }
 
+// ---- PDF 전체 저장 (회사 용지 25.517 x 19.05 cm, 한 파일) ----------------------------------
+// 슬라이드를 200dpi 그림(JPEG)으로 찍어 쪽마다 PDF 한 페이지에 넣는다. 외부 라이브러리 없이 PDF 를 직접 조립한다.
+// 그림 방식이라 PDF 안의 글자는 선택·검색되지 않는다(편집이 필요하면 PPT 저장을 사용).
+function pdfBuild(pages, pw, ph) {                                              // pages:[{bytes,w,h}] → PDF Uint8Array (pw/ph 는 pt)
+  const enc = new TextEncoder(), parts = [], offs = [];                         // 조각 목록, 개체별 시작 위치
+  let pos = 0;                                                                  // 지금까지 쓴 바이트 수
+  const put = u8 => { parts.push(u8); pos += u8.length; };                     // 바이트 추가
+  const txt = t => put(enc.encode(t));                                          // 글자 추가
+  const obj = (n, head, body) => {                                              // 개체 1개 기록(body 가 있으면 stream 으로)
+    offs[n] = pos; txt(n + ' 0 obj\n' + head);
+    if (body) { txt('\nstream\n'); put(body); txt('\nendstream'); }
+    txt('\nendobj\n');
+  };
+  txt('%PDF-1.4\n%\u00e2\u00e3\u00cf\u00d3\n');                              // 머리말
+  obj(1, '<< /Type /Catalog /Pages 2 0 R >>');                                  // 문서 루트
+  obj(2, '<< /Type /Pages /Count ' + pages.length + ' /Kids [' + pages.map((_, i) => (3 + i * 3) + ' 0 R').join(' ') + '] >>');   // 쪽 목록
+  pages.forEach((g, i) => {
+    const pg = 3 + i * 3, ct = pg + 1, im = pg + 2;                             // 쪽 / 내용 / 그림 개체 번호
+    obj(pg, '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + pw.toFixed(2) + ' ' + ph.toFixed(2) + '] /Resources << /XObject << /Im0 ' + im + ' 0 R >> >> /Contents ' + ct + ' 0 R >>');
+    const draw = enc.encode('q ' + pw.toFixed(2) + ' 0 0 ' + ph.toFixed(2) + ' 0 0 cm /Im0 Do Q');   // 그림을 쪽 전체에 맞춰 그림
+    obj(ct, '<< /Length ' + draw.length + ' >>', draw);
+    obj(im, '<< /Type /XObject /Subtype /Image /Width ' + g.w + ' /Height ' + g.h + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + g.bytes.length + ' >>', g.bytes);
+  });
+  const n = 3 + pages.length * 3, xr = pos;                                     // 개체 수, xref 시작 위치
+  let x = 'xref\n0 ' + n + '\n0000000000 65535 f \n';
+  for (let k = 1; k < n; k++) x += String(offs[k]).padStart(10, '0') + ' 00000 n \n';
+  txt(x + 'trailer\n<< /Size ' + n + ' /Root 1 0 R >>\nstartxref\n' + xr + '\n%%EOF\n');
+  const out = new Uint8Array(pos); let o = 0;                                   // 한 덩어리로 합치기
+  parts.forEach(u => { out.set(u, o); o += u.length; });
+  return out;
+}
+async function savePdfAll() {                                                   // 전체 슬라이드 → PDF 1개
+  PPT_STAGE = '';
+  try {
+    const pages = [];
+    for (let i = 0; i < SLIDES.length; i++) {
+      PPT_STAGE = '슬라이드 그림 만들기 ' + (i + 1) + '/' + SLIDES.length;
+      toast('PDF 만드는 중 ' + (i + 1) + '/' + SLIDES.length + ' …');
+      const cv = await slideToCanvas(i, 200);                                   // 200dpi 캔버스
+      const jb = await new Promise((res, rej) => cv.toBlob(b => (b ? res(b) : rej(new Error('JPEG 변환에 실패했습니다'))), 'image/jpeg', 0.92));
+      pages.push({ bytes: new Uint8Array(await jb.arrayBuffer()), w: cv.width, h: cv.height });
+    }
+    PPT_STAGE = 'PDF 조립';
+    const pdf = pdfBuild(pages, SW * 72, SH * 72);                              // 1in = 72pt
+    PPT_STAGE = '다운로드';
+    download(new Blob([pdf], { type: 'application/pdf' }), pptFileName(SLIDES.map((s, i) => i), 'all') + '.pdf');
+  } catch (e) { throw pptStageError(e); }
+}
+
 // ---- PPT 저장 대화상자 ---------------------------------------------------------------
 function pptDlgIndices() {                                                      // 대화상자에서 체크된 쪽 번호
   return [...document.querySelectorAll('#pptList input[type=checkbox]')].filter(c => c.checked).map(c => Number(c.dataset.i));
@@ -2329,6 +2379,7 @@ function bindEvents() {
   $('bCopy').onclick = () => guard('이미지 복사', () => copyPng(ST.cur, dpi()));
   $('bAllPng').onclick = () => guard('PNG 전체 저장', () => saveAllPng(dpi(), i => toast('PNG 전체 저장 ' + (i + 1) + '/' + SLIDES.length + ' …')));
   setupPptDialog();                                                             // PPT 저장 대화상자(모든 사용자)
+  $('bPdfAll').onclick = () => guard('PDF 전체 저장', () => savePdfAll());      // PDF 전체 저장(모든 사용자)
   $('bReset').onclick = () => { ST.texts = {}; lsSet(activeWeeklyTextStorageKey(), ST.texts); refresh(true); toast('선택 주차의 문구를 원래대로 되돌렸습니다'); };
   $('bData').onclick = () => { resetData(); saveData(); renderPanel(); refresh(true); toast('데이터를 원래 값으로 되돌렸습니다'); };
   $('bAdminMode').onclick=handleAdminModeButton;
