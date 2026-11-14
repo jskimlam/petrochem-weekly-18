@@ -1358,7 +1358,7 @@ function regSlide(els, kL, kR, subL, subR) {
     for (let lim = 1; lim <= 2; lim++) {
       for (let pt = 8; pt >= 6; pt -= 0.25) {
         const ok = ks.every(k => {
-          const texts = boxTexts(faOf(k)), inW = wf - 0.16;
+          const texts = boxTexts(faOf(k)), inW = (wf - 0.16) * (lim === 1 ? 0.92 : 1);   // 한 줄 판정은 8% 여유를 두어 브라우저·PPT 글꼴 폭 차이로 줄바꿈되는 것을 막는다
           const maxLine = Math.max.apply(null, texts.map(t => lineCount(t, pt, inW)));
           const need = 10 * 1.27 / 72 + texts.reduce((a, t) => a + lineCount(t, pt, inW) * pt * 1.27 / 72, 0);
           return maxLine <= lim && need <= (hB - 0.16) * 0.89;
