@@ -987,6 +987,11 @@ function lab(v, dec) {                                                          
 }
 function pctStr(p) { if(!Number.isFinite(p))return '미등록'; return (p > 0 ? '+' : (p < 0 ? '△' : '')) + fmt(Math.abs(p), 2) + '%'; }   // 등락률 문자열
 function firstSent(t) { return String(t).split(/(?<=[가-힣])\.\s+/)[0].replace(/\.$/, ''); }      // 첫 문장
+function firstSents(t, n) { return String(t).split(/(?<=[가-힣])\.\s+/).slice(0, n).join('. ').replace(/\.$/, ''); }   // 앞 n문장
+function splitAiOutlook(v) {                                                    // "하락 전망. 본문…" → {tag:'하락 전망', body:'본문…'}
+  const raw = String(v || '').trim(), m = raw.match(/^(상승|하락|보합)\s*전망\s*[.:·\-]?\s*/);   // 맨 앞 방향 문장 탐색
+  return m ? { tag: m[1] + ' 전망', body: raw.slice(m[0].length).trim() } : { tag: '', body: raw };   // 없으면 전부 본문
+}
 function dirOf(chg) { if(!Number.isFinite(chg))return '미등록'; return chg > 0 ? '상승' : (chg < 0 ? '하락' : '보합'); }
 function dirColor(chg) { const st = ST.style; return chg > 0 ? st.red : (chg < 0 ? st.sub : COL.mute); }   // 상승=빨강 / 하락=파랑
 function dirTone(chg) { return chg > 0 ? 'rose' : (chg < 0 ? 'blue' : 'gray'); }          // 방향별 바탕
@@ -1243,7 +1248,7 @@ function buildPoly() {
   const BM = { ABS: 'GP Injection CFR Asia NE', PC: 'GP Moulding CIF China', EPS: 'Packaging CFR Asia NE', PS: 'GPPS CFR China', PBR: 'High-CIS CFR Asia NE' };
   const bodyM = k => [TXT[k].sm, { mark: '▶', t: firstSent(TXT[k].ol) }];
   const ptM = commonPt(keys.map(k => ({ w: wM, h: rh, body: bodyM(k), hs: 9, max: 8.5, min: 6.5, inset: 0.07 })));
-  const ptA = commonPt(keys.map(k => ({ w: wA, h: rh, body: [firstSent(TXT[k].ai)], hs: 9, max: 8.5, min: 6.5, inset: 0.07 })));
+  const ptA = commonPt(keys.map(k => ({ w: wA, h: rh, body: [firstSents(TXT[k].ai, 2)], hs: 9, max: 8.5, min: 6.5, inset: 0.07 })));
   keys.forEach((k, i) => {
     const t = TXT[k], p = P[k], dc = dirColor(p.chg), dn = dirOf(p.chg), y = y0 + i * (rh + gap);
     let x = 0.22;
@@ -1259,7 +1264,7 @@ function buildPoly() {
     x += wC + 0.07;
     els.push(pbox('p' + i + '.m', x, y, wM, rh, '', '시황 · 전망', null, bodyM(k), { tone: 'mint', bs: ptM, hs: 9, inset: 0.07 }));
     x += wM + 0.07;
-    els.push(pbox('p' + i + '.a', x, y, wA, rh, '', 'AI 전망', { t: t.tag, c: st.sub }, [firstSent(t.ai)], { tone: 'peach', bs: ptA, hs: 9, inset: 0.07 }));
+    els.push(pbox('p' + i + '.a', x, y, wA, rh, '', 'AI 전망', { t: t.tag, c: st.sub }, [firstSents(t.ai, 2)], { tone: 'peach', bs: ptA, hs: 9, inset: 0.07 }));
   });
   els.push(noteLine('f', '※ 출처: Petrochemical Weekly Board ' + WEEK.label + '(' + WEEK.endFull + ') · W36=9/4 … W45=11/6 · 괄호 = 전주 대비 변동폭 · ▶ = 결론 및 전망 첫 문장'));
   return els;
@@ -2438,7 +2443,8 @@ function showArchive(entry){
       }
       if(week!==seedEnd){
         const lines=historicalBulletLines;
-        TXT[k]={cm:row.commentary||'미등록',sm:firstSent(row.commentary||'미등록'),ol:row.outlook||'미등록',fa:lines(row.factors),ad:lines(row.additional_info),ai:row.ai_outlook||'해당 주차 AI 전망 원문 미제공',tag:''};
+        const aiParts=splitAiOutlook(row.ai_outlook);                      // AI 전망 방향(tag)과 본문(body) 분리
+        TXT[k]={cm:row.commentary||'미등록',sm:firstSent(row.commentary||'미등록'),ol:row.outlook||'미등록',fa:lines(row.factors),ad:lines(row.additional_info),ai:aiParts.body||'해당 주차 AI 전망 원문 미제공',tag:aiParts.tag};
         if(ITEM[k])Object.assign(ITEM[k],{label:k,bm:row.benchmark||k,ptag:'공용 시트',tail1:'',m2:[R(firstSent(row.outlook||'전망 미등록'))],note:'※ 공용 시트 · '+week});
         if(REG[k])REG[k].bm=row.benchmark||k;
       }
