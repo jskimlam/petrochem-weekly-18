@@ -2376,7 +2376,7 @@ async function assemble(week){
 let HISTORICAL_CONTENT_PROMISE=null;
 function historicalContent(){
   if(!HISTORICAL_CONTENT_PROMISE){
-    HISTORICAL_CONTENT_PROMISE=fetch('./data/weekly_content_archive.json?v=20261108',{cache:'no-store'})
+    HISTORICAL_CONTENT_PROMISE=fetch('./data/weekly_content_archive.json?v=20261114',{cache:'no-store'})
       .then(r=>{if(!r.ok)throw Error('Historical archive '+r.status);return r.json();})
       .catch(e=>{console.warn('과거 시황 원문 복원 실패',e);return {by_week:{}};});
   }
