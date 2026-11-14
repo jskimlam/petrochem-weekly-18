@@ -163,6 +163,7 @@ body:not(.presentation-view) #viewerNav {display:none;}
   <span class="sp"></span>
   <button id="bAdminMode" type="button" aria-pressed="false" title="기존 데이터·문구·스타일 편집 도구 열기">⚙ 관리자 모드</button>
   <button id="bShow" class="pri">▶ 전체화면 발표</button>
+  <button id="bImgNow" type="button" title="지금 보고 있는 쪽을 PNG 이미지로 저장 (마스터 포함, 2009×1500px)">현재 쪽 이미지 저장</button>
   <button id="bPptMenu" class="pri" type="button" title="현재 쪽 / 선택 쪽 / 전체 / 쪽별 개별 파일로 PPT 저장">PPT 저장 ▾</button>
   <button id="bAsRec" type="button" title="주차별 전망 AS 판정 기록(18개 품목)을 CSV로 저장">AS 기록 CSV</button>
   <button id="bPdfAll" type="button" title="전체 슬라이드를 PDF 한 파일로 저장 (회사 용지 25.517 × 19.05 cm)">PDF 전체 저장</button>
@@ -2403,6 +2404,7 @@ function bindEvents() {
   window.addEventListener('resize', fitStage);
   const dpi = () => +$('dpi').value;
   $('bPng').onclick = () => guard('PNG 저장', () => savePng(ST.cur, dpi()));
+  $('bImgNow').onclick = () => guard('현재 쪽 이미지 저장', () => savePng(ST.cur, 200));   // 모든 사용자용 : 현재 쪽 PNG(200dpi) 즉시 저장
   $('bCopy').onclick = () => guard('이미지 복사', () => copyPng(ST.cur, dpi()));
   $('bAllPng').onclick = () => guard('PNG 전체 저장', () => saveAllPng(dpi(), i => toast('PNG 전체 저장 ' + (i + 1) + '/' + SLIDES.length + ' …')));
   setupPptDialog();                                                             // PPT 저장 대화상자(모든 사용자)
