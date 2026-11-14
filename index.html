@@ -1346,29 +1346,31 @@ const REG = {
   '유럽 BD': { label: '유럽 BD', bm: 'FOB ARA Spot Weekly (ICIS)', dec: 0, unit: '/mt', u2: '$/mt' }
 };
 function regSlide(els, kL, kR, subL, subR) {
-  // 배치 : [가격 박스 | 가격 추이] 한 줄 → 코멘터리 → [변동요인 35% | 결론 및 전망 65%] → AI 전망 (원문은 줄이지 않고 변동요인 6개 전부 표시)
+  // 배치 : [가격 박스 | 가격 추이] 한 줄 → 코멘터리 → [변동요인 45% | 결론 및 전망 55%] → AI 전망 (원문은 줄이지 않고 변동요인 6개 전부 표시)
   const st = ST.style, hw = (9.6 - 0.07) / 2, y0 = 1.42, GAP = 0.07, YE = 7.16;
   const wK = 1.7, hK = 1.0, hC = 1.08, hB = 1.8, hA = YE - (y0 + hK + hC + hB + 4 * GAP);   // 가격 박스 폭, 각 단 높이
-  const wf = (hw - GAP) * 0.35, wo = hw - GAP - wf;                               // 변동요인(35%) / 결론 및 전망(65%) 폭
+  const wf = (hw - GAP) * 0.45, wo = hw - GAP - wf;                               // 변동요인(45%) / 결론 및 전망(55%) 폭 — 변동요인 항목이 한 줄에 들어가는 폭
   const ks = [kL, kR];
   const faOf = k => TXT[k].fa.map(bl);                                            // 변동요인 전체(개수 제한 없음)
-  // 변동요인 글자 크기 : 모든 항목이 2줄 이내이면서 상자에 들어가는 가장 큰 크기(9pt~6.75pt)
+  // 변동요인 글자 크기 : 모든 항목이 1줄에 들어가면서 상자에 들어가는 가장 큰 크기(8pt~6pt). 1줄이 불가능하면 2줄 이내로 완화
   const fitFactors = () => {
-    for (let pt = 9; pt >= 6.75; pt -= 0.25) {
-      const ok = ks.every(k => {
-        const texts = boxTexts(faOf(k)), inW = wf - 0.16;
-        const maxLine = Math.max.apply(null, texts.map(t => lineCount(t, pt, inW)));
-        const need = 10 * 1.27 / 72 + texts.reduce((a, t) => a + lineCount(t, pt, inW) * pt * 1.27 / 72, 0);
-        return maxLine <= 2 && need <= (hB - 0.16) * 0.89;
-      });
-      if (ok) return pt;
+    for (let lim = 1; lim <= 2; lim++) {
+      for (let pt = 8; pt >= 6; pt -= 0.25) {
+        const ok = ks.every(k => {
+          const texts = boxTexts(faOf(k)), inW = wf - 0.16;
+          const maxLine = Math.max.apply(null, texts.map(t => lineCount(t, pt, inW)));
+          const need = 10 * 1.27 / 72 + texts.reduce((a, t) => a + lineCount(t, pt, inW) * pt * 1.27 / 72, 0);
+          return maxLine <= lim && need <= (hB - 0.16) * 0.89;
+        });
+        if (ok) return pt;
+      }
     }
-    return 6.75;
+    return 6;
   };
   const sz = {
     m: commonPt(ks.map(k => ({ w: hw, h: hC, body: [TXT[k].cm], hs: 10, max: 9, min: 6.75 }))),
     f: fitFactors(),
-    o: commonPt(ks.map(k => ({ w: wo, h: hB, body: [TXT[k].ol], hs: 10, max: 9, min: 6.75 }))),
+    o: commonPt(ks.map(k => ({ w: wo, h: hB, body: [TXT[k].ol], hs: 10, max: 9, min: 6.25 }))),
     a: commonPt(ks.map(k => ({ w: hw, h: hA, body: [TXT[k].ai], hs: 10, max: 9, min: 6.5 })))
   };
   ks.forEach((k, ci) => {
