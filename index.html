@@ -1241,7 +1241,7 @@ function buildAS(dyn) {
     els.push(pbox('as.n' + i, 0.22 + wI + 0.07 + wB + 0.07, y, wN, rh, '', '다음 주 점검', null, [r.nx], { tone: 'sun', bs: ptN, hs: 9.5, inset: 0.07 }));
   });
   els.push(noteLine('f', dyn
-    ? '※ 출처: 공용 시트 ' + WEEK.label + '(' + WEEK.endFull + ') · 전주(' + prevLbl + ') AI 전망 방향 vs 전주 대비 가격 방향 · 적중 = 방향 일치, 보합 = 가격 변동 없음(소폭이라도 오르내리면 상승·하락) · 나머지 13개 품목은 판정만 기록(CSV 저장 가능)'
+    ? '※ 출처: 공용 시트 ' + WEEK.label + '(' + WEEK.endFull + ') · 적중 = 전주(' + prevLbl + ') AI 전망 방향과 가격 방향 일치 · 보합 = 변동 없음 · 나머지 13품목은 기록만(AS 기록 CSV)'
     : '※ 출처: Petrochemical Weekly Board 전망 AS(' + WEEK.label + ', ' + WEEK.endFull + ') · 판정 근거·다음 주 점검은 보드 AS 요약문을 줄여 정리(수치·판정은 원문 그대로) · 적중 = 전망 방향과 실제 방향 일치'));
   return els;
 }
