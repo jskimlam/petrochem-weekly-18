@@ -1345,7 +1345,7 @@ const REG = {
 function regSlide(els, kL, kR, subL, subR) {
   // 배치 : [가격 박스 | 가격 추이] 한 줄 → 코멘터리 → [변동요인 30% | 결론 및 전망 70%] → AI 전망 (글 길이를 줄이지 않고 세로 공간 확보)
   const st = ST.style, hw = (9.6 - 0.07) / 2, y0 = 1.42, GAP = 0.07, YE = 7.16;
-  const wK = 1.55, hK = 1.1, hC = 1.08, hB = 1.62, hA = YE - (y0 + hK + hC + hB + 4 * GAP);   // 가격 박스 폭, 각 단 높이
+  const wK = 1.7, hK = 1.1, hC = 1.08, hB = 1.62, hA = YE - (y0 + hK + hC + hB + 4 * GAP);   // 가격 박스 폭, 각 단 높이
   const wf = (hw - GAP) * 0.3, wo = hw - GAP - wf;                                // 변동요인(30%) / 결론 및 전망(70%) 폭
   const ks = [kL, kR];
   const sz = {
@@ -1363,9 +1363,9 @@ function regSlide(els, kL, kR, subL, subR) {
     const kt = TONE[dirTone(p.chg)];                                                                   // 가격 박스 색(방향 톤)
     els.push(T(g + '.k', x, y, wK, hK, [                                                               // 가격 박스(제목·벤치마크·값·등락·전주)
       [R(m.label, { size: 9, bold: true, color: COL.mute })],
-      [R(String(m.bm).replace(/^(Styrene|Butadiene)\s+/i, ''), { size: 7, color: COL.mute })],   // 벤치마크(품목명 앞머리 제거로 2줄 이내)
-      [R(pv(p.cur), { size: 14, bold: true, color: dc })],
-      [R(p.chg === 0 ? '보합' : pctStr(p.pct), { size: 11, bold: true, color: dc })],
+      [R(String(m.bm).replace(/^(Styrene|Butadiene)\s+/i, '').replace(/\s+Current Month Close$/i, ' 당월물'), { size: 6.5, color: COL.mute })],   // 벤치마크(품목명 앞머리 제거로 2줄 이내)
+      [R(pv(p.cur), { size: 13, bold: true, color: dc })],
+      [R(p.chg === 0 ? '보합' : pctStr(p.pct), { size: 10, bold: true, color: dc })],
       [R('전주 ' + prevTxt, { size: 7.5, color: COL.mute })]],
       { fill: kt.fill, line: { c: kt.line === 'D9D9D9' ? st.main : kt.line, w: 1 }, rr: true, align: 'c', valign: 'm', inset: 0.03, edit: false, lock: true }));
     const x2 = x + wK + GAP, w2 = hw - wK - GAP;                                                       // 가격 추이 박스(오른쪽)
