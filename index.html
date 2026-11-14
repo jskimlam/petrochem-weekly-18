@@ -1248,7 +1248,7 @@ function buildPoly() {
   const BM = { ABS: 'GP Injection CFR Asia NE', PC: 'GP Moulding CIF China', EPS: 'Packaging CFR Asia NE', PS: 'GPPS CFR China', PBR: 'High-CIS CFR Asia NE' };
   const bodyM = k => [TXT[k].sm, { mark: '▶', t: firstSent(TXT[k].ol) }];
   const ptM = commonPt(keys.map(k => ({ w: wM, h: rh, body: bodyM(k), hs: 9, max: 8.5, min: 6.5, inset: 0.07 })));
-  const ptA = commonPt(keys.map(k => ({ w: wA, h: rh, body: [firstSents(TXT[k].ai, 2)], hs: 9, max: 8.5, min: 6.5, inset: 0.07 })));
+  const ptA = commonPt(keys.map(k => ({ w: wA, h: rh, body: [firstSent(TXT[k].ai)], hs: 9, max: 8.5, min: 6.5, inset: 0.07 })));
   keys.forEach((k, i) => {
     const t = TXT[k], p = P[k], dc = dirColor(p.chg), dn = dirOf(p.chg), y = y0 + i * (rh + gap);
     let x = 0.22;
@@ -1264,7 +1264,7 @@ function buildPoly() {
     x += wC + 0.07;
     els.push(pbox('p' + i + '.m', x, y, wM, rh, '', '시황 · 전망', null, bodyM(k), { tone: 'mint', bs: ptM, hs: 9, inset: 0.07 }));
     x += wM + 0.07;
-    els.push(pbox('p' + i + '.a', x, y, wA, rh, '', 'AI 전망', { t: t.tag, c: st.sub }, [firstSents(t.ai, 2)], { tone: 'peach', bs: ptA, hs: 9, inset: 0.07 }));
+    els.push(pbox('p' + i + '.a', x, y, wA, rh, '', 'AI 전망', { t: t.tag, c: st.sub }, [firstSent(t.ai)], { tone: 'peach', bs: ptA, hs: 9, inset: 0.07 }));
   });
   els.push(noteLine('f', '※ 출처: Petrochemical Weekly Board ' + WEEK.label + '(' + WEEK.endFull + ') · W36=9/4 … W45=11/6 · 괄호 = 전주 대비 변동폭 · ▶ = 결론 및 전망 첫 문장'));
   return els;
