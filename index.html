@@ -1053,8 +1053,9 @@ function priceChart(id, x, y, w, h, o) {
   else { y0 = Math.floor((lo - 0.50 * span) / step) * step; y1 = Math.ceil((hi + 0.30 * span) / step) * step; }
   const rM = Math.max(0.12, 0.82 / w);                                            // 오른쪽 여백(괄호·차이 숫자 자리)
   const showLeg = !!(o.daily && !o.compact);
-  const ch = CHT(id, x, y, w, h, { plot: { l: 0.04, t: showLeg ? 0.24 : 0.13, r: rM, b: o.compact ? 0.17 : 0.15 }, cats: o.cats, y0: y0, y1: y1,
-    catSize: o.compact ? 6.5 : 8.5, grouping: 'clustered', legend: showLeg ? { pos: 't', size: 8 } : null });
+  const rot = (o.compact && !o.daily && w < 3.5 && o.cats.length > 6) ? -45 : undefined;   // 좁은 차트의 일자 라벨은 45도로 눕혀 겹치지 않게(PPT 에서도 같은 회전)
+  const ch = CHT(id, x, y, w, h, { plot: { l: 0.04, t: showLeg ? 0.24 : 0.13, r: rM, b: rot !== undefined ? 0.30 : (o.compact ? 0.17 : 0.15) }, cats: o.cats, y0: y0, y1: y1,
+    catSize: o.compact ? 6.5 : 8.5, catRot: rot, grouping: 'clustered', legend: showLeg ? { pos: 't', size: 8 } : null });
   const dc = dirColor(chg), lsz = o.compact ? 7.5 : 8.5;
   // 라벨 위치: 일별 = 전주 종가보다 낮은 점은 아래 / 주간 = 극소점은 아래
   // 라벨 위치: 일별 = 전주 종가보다 낮은 점은 아래 / 주간 = 극소점은 아래
