@@ -1197,12 +1197,12 @@ function buildAS(dyn) {
   const prevLbl = dyn ? dyn.prevLabel : 'W44';
   let p1, p2;
   if (dyn) {                                                                       // 시트 주차 : 문구를 판정 결과에서 자동 생성
-    p1 = [R('□ '), R('전주(' + prevLbl + ') AI 전망 vs 이번 주 실제 — 5대 주원료 '), tot ? R('적중 ' + hit + '/' + tot + '건(' + fmt(hit / tot * 100, 0) + '%)', { u: true, c: st.sub }) : R('판정 불가', { u: true, c: st.red }),
+    p1 = [R('□ '), R('전주(' + prevLbl + ') AI 전망 vs 이번 주 실제 — 5대 주원료 '), tot ? R('적중 ' + hit + '/' + tot + '건(' + fmt(hit / tot * 100, 0) + '%)', { u: true, c: st.red }) : R('판정 불가', { u: true, c: st.red }),
       R(tot ? (' · ' + (hitNames ? hitNames + ' 적중' : '적중 없음') + (missNames ? ', ' + missNames + ' 오판' : '')) : ' · 전주 AI 전망 원문을 불러오지 못했습니다')];
     const miss = judged.filter(r => !r.hit).map(r => r.n + ' ' + r.f + '→' + r.a + '(' + pctStr(r.pct) + ')').join(', ');
     p2 = [R('□ '), R(miss ? '방향 이탈 ' : (tot ? '5개 모두 ' : '전주 전망 방향 확인 필요')), R(miss || (tot ? '전망 방향과 실제 방향 일치' : ''), { u: true }), R(miss ? ' — 오판 원인을 다음 전망의 비용·수급 비중에 반영' : '')];
   } else {
-    p1 = [R('□ '), R('전주(W44) AI 전망 vs 이번 주 실제 — 5대 주원료 '), R('적중 ' + hit + '/' + tot + '건(' + fmt(hit / tot * 100, 0) + '%)', { u: true, c: st.sub }), R(' · BPA·MMA 적중, SM·AN·BD 오판')];
+    p1 = [R('□ '), R('전주(W44) AI 전망 vs 이번 주 실제 — 5대 주원료 '), R('적중 ' + hit + '/' + tot + '건(' + fmt(hit / tot * 100, 0) + '%)', { u: true, c: st.red }), R(' · BPA·MMA 적중, SM·AN·BD 오판')];
     p2 = [R('□ '), R('5개 모두 '), R('보합 전망', { u: true }), R('이었으나 SM·BD는 하락, AN은 상승으로 방향 이탈 — 원료비·유가 급변 구간의 판단 보정 필요')];
   }
   const els = topMsg('전망 AS · 5대 주원료 전망 적중 점검 · ' + WEEK.label + ' (' + WEEK.end + ')', p1, p2);
@@ -1210,12 +1210,12 @@ function buildAS(dyn) {
   const ky = 1.38, kh = 0.52, kg = 0.1, kw = (9.6 - 3 * kg) / 4;
   const dn = rows.filter(r => r.pct < 0).sort((x, y) => x.pct - y.pct)[0], up = rows.filter(r => r.pct > 0).sort((x, y) => y.pct - x.pct)[0];   // 최대 하락·상승 품목
   const kp = dyn ? [
-    ['5대 주원료 적중률', tot ? fmt(hit / tot * 100, 0) + '%' : '-', st.sub, tot ? hit + '/' + tot + ' 적중' : '전주 전망 없음', 'blue'],
+    ['5대 주원료 적중률', tot ? fmt(hit / tot * 100, 0) + '%' : '-', st.red, tot ? hit + '/' + tot + ' 적중' : '전주 전망 없음', 'rose'],
     ['전체 18품목 적중률', dyn.totAll ? fmt(dyn.hitAll / dyn.totAll * 100, 1) + '%' : '-', '000000', dyn.totAll ? dyn.totAll + '개 품목 중 ' + dyn.hitAll + '개 적중' : '전주 전망 없음', 'gray'],
     ['최대 하락 괴리', dn ? dn.n + ' ' + pctStr(dn.pct) : '없음', st.sub, dn ? dn.px : '하락 품목 없음', 'blue'],
     ['최대 상승 괴리', up ? up.n + ' ' + pctStr(up.pct) : '없음', st.red, up ? up.px : '상승 품목 없음', 'rose']
   ] : [
-    ['5대 주원료 적중률', fmt(hit / tot * 100, 0) + '%', st.sub, hit + '/' + tot + ' 적중 (BPA·MMA)', 'blue'],
+    ['5대 주원료 적중률', fmt(hit / tot * 100, 0) + '%', st.red, hit + '/' + tot + ' 적중 (BPA·MMA)', 'rose'],
     ['전체 보드 적중률', '55.6%', '000000', '18개 품목 중 10개 적중', 'gray'],
     ['최대 하락 괴리', 'SM △12.31%', st.sub, '$1,425.50 → $1,250.00/mt', 'blue'],
     ['최대 상승 괴리', 'AN +11.80%', st.red, '$1,610 → $1,800/mt (11/3)', 'rose']];
@@ -1230,7 +1230,7 @@ function buildAS(dyn) {
   const ptB = commonPt(rows.map(r => ({ w: wB, h: rh, body: [r.bs], hs: 9.5, max: 9.5, min: 7, inset: 0.07 })));   // 판정 근거 공통 크기
   const ptN = commonPt(rows.map(r => ({ w: wN, h: rh, body: [r.nx], hs: 9.5, max: 9.5, min: 7, inset: 0.07 })));   // 다음 주 점검 공통 크기
   rows.forEach((r, i) => {
-    const y = y0 + i * (rh + gap), mc = r.hit === null ? COL.mute : (r.hit ? st.sub : st.red), dc = r.pct > 0 ? st.red : (r.pct < 0 ? st.sub : COL.mute), tn = TONE[r.hit === null ? 'gray' : (r.hit ? 'mint' : 'rose')];
+    const y = y0 + i * (rh + gap), mc = r.hit === null ? COL.mute : (r.hit ? st.red : st.sub), dc = r.pct > 0 ? st.red : (r.pct < 0 ? st.sub : COL.mute), tn = TONE[r.hit === null ? 'gray' : (r.hit ? 'rose' : 'blue')];
     els.push(T('as.i' + i, 0.22, y, wI, rh, [
       [R(r.n, { size: 13, bold: true, color: '000000' }), R('   ' + (r.hit === null ? '● 판정불가' : (r.hit ? '● 적중' : '● 오판')), { size: 9.5, bold: true, color: mc })],
       [R('전망 ' + r.f + ' → 실제 ' + r.a, { size: 8.5, bold: true, color: '000000' })],
