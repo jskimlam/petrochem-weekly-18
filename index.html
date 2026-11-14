@@ -138,6 +138,23 @@ body:not(.presentation-view) #viewerNav {display:none;}
 #adminGate .gate-actions{display:flex;gap:9px;margin-top:10px}
 #adminGate .gate-actions button{flex:1;min-height:41px;font-size:13px;font-weight:750}
 #adminGate .gate-actions button.pri{background:#17365d;color:#fff;border-color:#17365d}
+/* PPT 저장 대화상자 */
+#pptDlg{border:1px solid #cbd5e1;border-radius:16px;padding:0;width:min(470px,calc(100vw - 24px));background:#fff;color:#15243d;box-shadow:0 20px 65px rgba(9,30,66,.32)}
+#pptDlg::backdrop{background:rgba(10,22,42,.6)}
+#pptDlg .pd-body{padding:20px 22px 16px}
+#pptDlg h2{font-size:18px;margin:0 0 4px;font-weight:850;color:#16365b}
+#pptDlg .pd-sub{font-size:12px;color:#566579;margin:0 0 12px;line-height:1.5}
+#pptDlg .pd-scope{display:flex;gap:6px;margin-bottom:8px}
+#pptDlg .pd-scope label{flex:1;text-align:center;border:1px solid #aebfd3;border-radius:8px;padding:7px 4px;font-size:13px;font-weight:700;cursor:pointer;color:#405168;background:#fff}
+#pptDlg .pd-scope input{position:absolute;opacity:0;pointer-events:none}
+#pptDlg .pd-scope label.on{background:#17365d;border-color:#17365d;color:#fff}
+#pptDlg .pd-list{max-height:240px;overflow:auto;border:1px solid #d5dfeb;border-radius:8px;padding:4px 8px;margin-bottom:8px}
+#pptDlg .pd-list label{display:flex;gap:8px;align-items:center;font-size:13px;padding:3px 0;cursor:pointer}
+#pptDlg .pd-opt{display:flex;gap:8px;align-items:center;font-size:13px;font-weight:700;margin:4px 0 8px;cursor:pointer}
+#pptDlg .pd-name{font-size:12px;color:#17365d;background:#f0f4fc;border-radius:8px;padding:8px 10px;line-height:1.55;word-break:break-all;min-height:20px}
+#pptDlg .pd-actions{display:flex;gap:9px;margin-top:12px}
+#pptDlg .pd-actions button{flex:1;min-height:41px;font-size:13px;font-weight:750}
+#pptDlg .pd-actions button.pri{background:#17365d;color:#fff;border-color:#17365d}
 </style>
 </head>
 <body class="presentation-view">
@@ -146,8 +163,7 @@ body:not(.presentation-view) #viewerNav {display:none;}
   <span class="sp"></span>
   <button id="bAdminMode" type="button" aria-pressed="false" title="기존 데이터·문구·스타일 편집 도구 열기">⚙ 관리자 모드</button>
   <button id="bShow" class="pri">▶ 전체화면 발표</button>
-  <button id="bPpt" class="pri admin-only">PPT 저장(현재)</button>
-  <button id="bAllPpt" class="pri admin-only">PPT 전체 저장</button>
+  <button id="bPptMenu" class="pri" type="button" title="현재 쪽 / 선택 쪽 / 전체 / 쪽별 개별 파일로 PPT 저장">PPT 저장 ▾</button>
   <select id="dpi" class="admin-only" title="PNG 해상도"><option value="150">PNG 150dpi (1507×1125)</option><option value="200" selected>PNG 200dpi (2009×1500)</option><option value="300">PNG 300dpi (3014×2250)</option></select>
   <button id="bPng" class="admin-only">PNG 저장</button>
   <button id="bCopy" class="admin-only">이미지 복사</button>
@@ -161,7 +177,7 @@ body:not(.presentation-view) #viewerNav {display:none;}
 <dialog id="adminGate" aria-labelledby="adminGateTitle">
   <div class="gate-body">
     <h2 id="adminGateTitle">관리자 모드 인증</h2>
-    <p>문구·데이터 편집 및 PPT 저장 도구에 접근하려면 관리자 비밀번호를 입력하세요.</p>
+    <p>문구·데이터 편집 및 PNG 저장 도구에 접근하려면 관리자 비밀번호를 입력하세요.</p>
     <form id="adminGateForm">
       <label for="adminGatePassword">비밀번호 (숫자 6자리)</label>
       <input id="adminGatePassword" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" aria-describedby="adminGateError" required>
@@ -171,6 +187,24 @@ body:not(.presentation-view) #viewerNav {display:none;}
         <button type="submit" class="pri">관리자 진입</button>
       </div>
     </form>
+  </div>
+</dialog>
+<dialog id="pptDlg" aria-labelledby="pptDlgTitle">
+  <div class="pd-body">
+    <h2 id="pptDlgTitle">PPT 저장 (회사 양식)</h2>
+    <p class="pd-sub">25.517 × 19.05 cm · 표·그래프는 PPT 개체로 저장 · 구분선·장식은 슬라이드 마스터에 들어갑니다.</p>
+    <div class="pd-scope" id="pptScope">
+      <label data-v="cur"><input type="radio" name="pptScope" value="cur">현재 쪽</label>
+      <label data-v="sel"><input type="radio" name="pptScope" value="sel">선택 쪽</label>
+      <label data-v="all"><input type="radio" name="pptScope" value="all">전체</label>
+    </div>
+    <div class="pd-list" id="pptList"></div>
+    <label class="pd-opt"><input type="checkbox" id="pptSep">쪽별 개별 파일로 저장 (쪽마다 .pptx 1개)</label>
+    <div class="pd-name" id="pptName" role="status" aria-live="polite"></div>
+    <div class="pd-actions">
+      <button type="button" id="pptCancel">취소</button>
+      <button type="button" id="pptGo" class="pri">저장</button>
+    </div>
   </div>
 </dialog>
 <div id="toast"></div>
@@ -1866,7 +1900,9 @@ function chartXml(ch) {                                                         
 }
 
 // ---- 후처리: 차트 XML 교체 + 엑셀의 빈 값 칸 정리 -----------------------------------
+let PPT_STAGE = '';                                                              // 현재 저장 단계(실패 시 한글 안내에 사용)
 async function patchCharts(buf) {
+  PPT_STAGE = '차트 후처리';                                                    // 3단계: 차트 XML 교체 + 내장 엑셀 정리
   const zip = await JSZip.loadAsync(buf);                                       // PPTX(zip) 열기
   const cnum = f => parseInt(f.match(/chart(\d+)\.xml$/)[1], 10);                // 파일 번호(PptxGenJS는 저장을 반복해도 번호가 계속 증가함)
   const files = Object.keys(zip.files).filter(f => /^ppt\/charts\/chart\d+\.xml$/.test(f)).sort((a, b) => cnum(a) - cnum(b));   // 번호순 = 생성순
@@ -1888,6 +1924,7 @@ async function patchCharts(buf) {
       zip.file(xp, await xz.generateAsync({ type: 'uint8array', compression: 'DEFLATE' }));
     }
   }
+  PPT_STAGE = '마스터 삽입';                                                    // 4단계: 슬라이드 마스터
   await patchMaster(zip);                                                       // 구분선·장식을 슬라이드 마스터에 삽입
   return zip.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
 }
@@ -1895,6 +1932,7 @@ async function patchCharts(buf) {
 // ---- 메인: 슬라이드 목록 → PPTX Blob ---------------------------------------------
 async function buildPptxBlob(indices) {
   if (typeof PptxGenJS === 'undefined' || typeof JSZip === 'undefined') throw new Error('PPT 만들기 기능을 불러오지 못했습니다');
+  PPT_STAGE = '장면 확정';                                                      // 1단계: 화면에서 고친 문구·수치를 반영한 장면 요소 목록
   CH_Q.length = 0;                                                              // 차트 기록 초기화
   const pptx = new PptxGenJS();
   pptx.defineLayout({ name: 'LOTTE_ABS', width: SW, height: SH });              // 회사 용지 25.517 x 19.05 cm
@@ -1911,6 +1949,7 @@ async function buildPptxBlob(indices) {
       else if (el.k === 'chart') pptAddChart(sl, pptx, el);
     });
   });
+  PPT_STAGE = 'PPT 생성';                                                       // 2단계: PptxGenJS 로 슬라이드·표·차트 틀 생성
   const buf = await pptx.write({ outputType: 'arraybuffer' });                  // 1차 생성
   return patchCharts(buf);                                                      // 차트 XML 교체
 }
@@ -2010,10 +2049,84 @@ async function saveAllPng(dpi, onStep) {                                        
   }
   download(await zip.generateAsync({ type: 'blob' }), '석유화학위클리_PNG_' + stamp() + '.zip');
 }
-async function savePptx(indices) {                                              // PPT 저장(표·차트 개체)
-  const blob = await buildPptxBlob(indices);
-  const name = indices.length === 1 ? '석유화학위클리_' + slideFileName(indices[0]) : '석유화학위클리_' + stamp();
-  download(blob, name + '.pptx');
+// ---- PPT 저장 (현재 쪽 / 선택 쪽 / 전체 / 쪽별 개별 파일) ----------------------------
+function pptTitle() { return '위클리_' + WEEK.label; }                          // 파일명 앞부분: 위클리_W46
+function pptRange(indices) {                                                    // [0,1,2,4] → "S01-S03_S05" (연속 구간은 줄여서 표기)
+  const a = [...indices].sort((x, y) => x - y), out = [];
+  for (let i = 0; i < a.length;) {
+    let j = i; while (j + 1 < a.length && a[j + 1] === a[j] + 1) j++;           // 연속 구간 끝 찾기
+    out.push(j > i ? 'S' + pad(a[i] + 1, 2) + '-S' + pad(a[j] + 1, 2) : 'S' + pad(a[i] + 1, 2));
+    i = j + 1;
+  }
+  return out.join('_');
+}
+function pptFileName(indices, scope) {                                          // 지침 규칙 파일명(확장자 제외)
+  if (scope === 'all') return pptTitle() + '_전체_' + pptRange(indices);        // 전체: 제목_전체_S01-S18
+  return pptTitle() + '_' + pptRange(indices);                                  // 현재: 제목_S03 / 선택: 제목_S01-S03
+}
+function pptStageError(e) {                                                     // 어느 단계에서 실패했는지 붙인 한글 오류
+  const m = e && e.message ? e.message : '알 수 없는 오류';
+  return new Error('[' + (PPT_STAGE || '준비') + ' 단계] ' + m);
+}
+async function savePptx(indices, scope, separate) {                             // PPT 저장 본체
+  if (!indices.length) throw new Error('저장할 쪽을 한 개 이상 선택하세요');
+  PPT_STAGE = '';                                                               // 이전 저장의 단계 기록 초기화
+  try {
+    if (separate) {                                                             // 쪽별 개별 파일 N개
+      for (let n = 0; n < indices.length; n++) {
+        toast('PPT 저장 ' + (n + 1) + '/' + indices.length + ' …');
+        const blob = await buildPptxBlob([indices[n]]);
+        PPT_STAGE = '다운로드';
+        download(blob, pptFileName([indices[n]], 'cur') + '.pptx');
+        await new Promise(r => setTimeout(r, 450));                            // 브라우저가 연속 다운로드를 막지 않도록 간격
+      }
+      return;
+    }
+    const blob = await buildPptxBlob(indices);                                  // 한 파일로 묶어 저장
+    PPT_STAGE = '다운로드';
+    download(blob, pptFileName(indices, scope) + '.pptx');
+  } catch (e) { throw pptStageError(e); }
+}
+
+// ---- PPT 저장 대화상자 ---------------------------------------------------------------
+function pptDlgIndices() {                                                      // 대화상자에서 체크된 쪽 번호
+  return [...document.querySelectorAll('#pptList input[type=checkbox]')].filter(c => c.checked).map(c => Number(c.dataset.i));
+}
+function pptDlgScope() { const r = document.querySelector('#pptScope input:checked'); return r ? r.value : 'cur'; }
+function pptDlgSync(fromScope) {                                                // 범위 ↔ 체크박스 ↔ 파일명 미리보기 동기화
+  const cur = Math.min(ST.cur, SLIDES.length - 1), boxes = [...document.querySelectorAll('#pptList input[type=checkbox]')];
+  let sc = pptDlgScope();
+  if (fromScope) boxes.forEach(c => { c.checked = sc === 'all' ? true : (sc === 'cur' ? Number(c.dataset.i) === cur : c.checked); });   // 범위를 바꾸면 체크 상태 맞춤
+  const idx = pptDlgIndices(), sep = $('pptSep').checked;
+  if (!fromScope) {                                                             // 체크를 직접 바꾸면 범위를 자동 판단
+    sc = idx.length === SLIDES.length ? 'all' : (idx.length === 1 && idx[0] === cur ? 'cur' : 'sel');
+    const r = document.querySelector('#pptScope input[value=' + sc + ']'); if (r) r.checked = true;
+  }
+  document.querySelectorAll('#pptScope label').forEach(l => l.classList.toggle('on', l.dataset.v === sc));
+  $('pptName').textContent = !idx.length ? '저장할 쪽을 한 개 이상 선택하세요.'
+    : (sep ? idx.length + '개 파일: ' + pptFileName([idx[0]], 'cur') + '.pptx' + (idx.length > 1 ? ' … ' + pptFileName([idx[idx.length - 1]], 'cur') + '.pptx' : '')
+           : pptFileName(idx, sc) + '.pptx');
+  $('pptGo').disabled = !idx.length;
+}
+function openPptDialog() {                                                      // 대화상자 열기(기본: 현재 쪽)
+  const cur = Math.min(ST.cur, SLIDES.length - 1);
+  $('pptList').innerHTML = SLIDES.map((s, i) => '<label><input type="checkbox" data-i="' + i + '"' + (i === cur ? ' checked' : '') + '>S' + pad(i + 1, 2) + ' · ' + esc(s.tab.replace(/^[①-⑳]\s*/, '')) + '</label>').join('');
+  document.querySelector('#pptScope input[value=cur]').checked = true;
+  $('pptSep').checked = false;
+  pptDlgSync(true);
+  const d = $('pptDlg'); if (!d.open) d.showModal();
+}
+function setupPptDialog() {                                                     // 대화상자 이벤트 연결
+  $('bPptMenu').onclick = openPptDialog;
+  $('pptCancel').onclick = () => $('pptDlg').close();
+  document.querySelectorAll('#pptScope input').forEach(r => r.addEventListener('change', () => pptDlgSync(true)));
+  $('pptList').addEventListener('change', () => pptDlgSync(false));
+  $('pptSep').addEventListener('change', () => pptDlgSync(false));
+  $('pptGo').onclick = () => {
+    const idx = pptDlgIndices(), sc = pptDlgScope(), sep = $('pptSep').checked;
+    $('pptDlg').close();
+    guard('PPT 저장', () => savePptx(idx, sc, sep));
+  };
 }
 
 /* =====================================================================
@@ -2215,8 +2328,7 @@ function bindEvents() {
   $('bPng').onclick = () => guard('PNG 저장', () => savePng(ST.cur, dpi()));
   $('bCopy').onclick = () => guard('이미지 복사', () => copyPng(ST.cur, dpi()));
   $('bAllPng').onclick = () => guard('PNG 전체 저장', () => saveAllPng(dpi(), i => toast('PNG 전체 저장 ' + (i + 1) + '/' + SLIDES.length + ' …')));
-  $('bPpt').onclick = () => guard('PPT 저장(현재 슬라이드)', () => savePptx([Math.min(ST.cur, SLIDES.length - 1)]));
-  $('bAllPpt').onclick = () => guard('PPT 전체 저장', () => savePptx(SLIDES.map((s, i) => i)));
+  setupPptDialog();                                                             // PPT 저장 대화상자(모든 사용자)
   $('bReset').onclick = () => { ST.texts = {}; lsSet(activeWeeklyTextStorageKey(), ST.texts); refresh(true); toast('선택 주차의 문구를 원래대로 되돌렸습니다'); };
   $('bData').onclick = () => { resetData(); saveData(); renderPanel(); refresh(true); toast('데이터를 원래 값으로 되돌렸습니다'); };
   $('bAdminMode').onclick=handleAdminModeButton;
