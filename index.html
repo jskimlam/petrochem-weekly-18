@@ -1147,8 +1147,9 @@ function extraKpi(k, vals, prev, cur) {
 
 function buildItem(k) {
   const st = ST.style, c = ITEM[k], t = TXT[k], g = gid(k);
-  const vals = c.daily ? rowOf('d_' + g, 'v') : rowOf('w_' + g, 'v');
-  const n = vals.length, prev = report ? livePcts(k).prev : c.daily ? vals[0] : vals[n-2], cur = report ? livePcts(k).cur : vals[n-1];
+  const dly = dailyOn(k, c.daily);                                              // 일별 값이 충분할 때만 일별 그래프
+  const vals = dly ? rowOf('d_' + g, 'v') : rowOf('w_' + g, 'v');
+  const n = vals.length, prev = report ? livePcts(k).prev : dly ? vals[0] : vals[n-2], cur = report ? livePcts(k).cur : vals[n-1];
   const chg = report ? livePcts(k).chg : cur-prev, pct = report ? livePcts(k).pct : prev ? chg / prev * 100 : 0, dn = dirOf(chg), dc = dirColor(chg);
   const dateEnd = report ? (String(currentRow(k).assessment_date||WEEK.endFull).slice(0,10)) : k === 'AN' ? '11/3' : WEEK.end;
   const pf = v => report ? (isNum(v)?String.fromCharCode(36)+v.toLocaleString('en-US',{maximumFractionDigits:4}):'미등록') : pfx(v,c.dec);
@@ -1171,8 +1172,8 @@ function buildItem(k) {
   const avail = YE - y0 - 2 * GAP, r2 = 1.47, r3 = 1.65, r1 = avail - r2 - r3;
   const Y1 = y0, Y2 = y0 + r1 + GAP, Y3 = Y2 + r2 + GAP;
   els.push(pbox('b1', LX, Y1, LW, r1, '1', '가격 추이', { t: '(' + c.bm + ')', c: COL.mute }, [], { tone: 'blue', bs: 8 }));
-  const cats = c.daily ? G('d_'+g).cols.map(v=>v.replace('(전주)','')) : WK10;
-  priceChart('chart', LX + 0.04, Y1 + 0.27, LW - 0.08, r1 - 0.31, { vals: vals, cats: cats, daily: c.daily, dec: c.dec === null ? null : c.dec, legendName: 'CFR 평가' }).forEach(e => els.push(e));
+  const cats = dly ? G('d_'+g).cols.map(v=>v.replace('(전주)','')) : WK10;   // 주간이면 일자(9/11 …)로 표시
+  priceChart('chart', LX + 0.04, Y1 + 0.27, LW - 0.08, r1 - 0.31, { vals: vals, cats: cats, daily: dly, dec: c.dec === null ? null : c.dec, legendName: 'CFR 평가' }).forEach(e => els.push(e));
   els.push(pbox('b2', RX, Y1, RW, r1, '2', '코멘터리', { t: dn + ' 마감', c: dc }, [t.cm], { tone: 'mint', max: 11.5, min: 7.5 }));
   els.push(pbox('b3', LX, Y2, LW, r2, '3', '변동요인', null, t.fa.map(bl), { tone: 'sun', max: 10.5, min: 7.5 }));
   els.push(pbox('b4', RX, Y2, RW, r2, '4', '결론 및 전망', null, [t.ol], { tone: 'lav', max: 12.5, min: 8 }));
@@ -1231,12 +1232,16 @@ const MULTI = {
   Propylene: { label: 'Propylene', bm: 'CFR China Spot', dec: null, daily: false, unit: '/mt' },
   Benzene: { label: 'Benzene', bm: 'FOB Korea 일별', dec: 2, daily: true, unit: '/mt' }
 };
+function dailyOn(k, flag) {                                                      // 일별 그래프 사용 여부: 일별 값이 3개 이상 있을 때만(전주·금주 2점뿐이면 주간 10주 그래프)
+  if (!flag) return false;
+  return rowOf('d_' + gid(k), 'v').filter(isNum).length >= 3;
+}
 function seriesOf(k, daily) { return daily ? rowOf('d_' + gid(k), 'v') : rowOf('w_' + gid(k), 'v'); }
 function pcts(vals, daily) { const n = vals.length, prev = daily ? vals[0] : vals[n - 2], cur = vals[n - 1]; return { prev: prev, cur: cur, chg: cur - prev, pct: prev ? (cur - prev) / prev * 100 : 0 }; }
 
 function buildBase() {
   const st = ST.style, keys = ['Ethylene', 'Propylene', 'Benzene'];
-  const P = {}; keys.forEach(k => { P[k] = report ? livePcts(k) : pcts(seriesOf(k, MULTI[k].daily), MULTI[k].daily); });
+  const P = {}; keys.forEach(k => { const dl = dailyOn(k, MULTI[k].daily); P[k] = report ? livePcts(k) : pcts(seriesOf(k, dl), dl); });
   const p1 = [R('□ '), R('에틸렌 '), R(pctStr(P.Ethylene.pct), { u: true, c: dirColor(P.Ethylene.chg) }), R(' · 프로필렌 '), R(pctStr(P.Propylene.pct), { u: true, c: dirColor(P.Propylene.chg) }), R(' 상승, 벤젠 '),
     R(pctStr(P.Benzene.pct) + ' 급락(' + pfx(P.Benzene.prev, 0) + ' → ' + pfx(P.Benzene.cur, 0) + '/mt)', { u: true, c: dirColor(P.Benzene.chg) })];
   const p2 = [R('□ '), R('에틸렌·프로필렌은 크래커 보수·PDH 정지로 '), R('공급 제약', { u: true }), R(', 벤젠은 원유·중국 선물 약세로 '), R('하방 압력', { u: true }), R(' — 유도품 마진 악화가 상단 제한')];
@@ -1255,8 +1260,8 @@ function buildBase() {
     els.push(kpiBox('c' + i + '.k', x, y, cw, hK, m.label + ' · ' + m.bm, (report ? (currentRow(k).current_price||'미등록') : pfx(p.cur,m.dec)+'/mt')+'   '+pctStr(p.pct), dc,
       '전주 ' + pfx(p.prev, m.dec) + ' 대비 ' + (p.chg > 0 ? '+' : (p.chg < 0 ? '△' : '')) + fmt(Math.abs(p.chg), m.dec === null ? 0 : m.dec) + ' · ' + dn, dc, dirTone(p.chg), 15));
     y += hK + GAP;
-    els.push(pbox('c' + i + '.p', x, y, cw, hC, String(i * 4 + 1), '가격 추이', { t: m.daily ? '(일별 · $/mt)' : '(10주 · $/mt)', c: COL.mute }, [], { tone: 'blue', bs: 8, hs: 10 }));
-    priceChart('c' + i + '.chart', x + 0.03, y + 0.24, cw - 0.06, hC - 0.27, { vals: seriesOf(k, m.daily), cats: m.daily ? G('d_'+gid(k)).cols : WKW, daily: m.daily, dec: m.dec, ldec: m.daily ? 0 : m.dec, compact: true, legendName: '평가' }).forEach(e => els.push(e));
+    els.push(pbox('c' + i + '.p', x, y, cw, hC, String(i * 4 + 1), '가격 추이', { t: dailyOn(k, m.daily) ? '(일별 · $/mt)' : '(10주 · $/mt)', c: COL.mute }, [], { tone: 'blue', bs: 8, hs: 10 }));
+    priceChart('c' + i + '.chart', x + 0.03, y + 0.24, cw - 0.06, hC - 0.27, { vals: seriesOf(k, dailyOn(k, m.daily)), cats: dailyOn(k, m.daily) ? G('d_'+gid(k)).cols : WK10, daily: dailyOn(k, m.daily), dec: m.dec, ldec: dailyOn(k, m.daily) ? 0 : m.dec, compact: true, legendName: '평가' }).forEach(e => els.push(e));
     y += hC + GAP;
     els.push(pbox('c' + i + '.m', x, y, cw, hM, String(i * 4 + 2), '시황 요약', { t: dn + ' 마감', c: dc }, bodyM(k), { tone: 'mint', bs: ptM, hs: 10 }));
     y += hM + GAP;
@@ -1295,7 +1300,7 @@ function buildPoly() {
       { fill: TONE[dirTone(p.chg)].fill, line: { c: TONE[dirTone(p.chg)].line, w: 0.75 }, rr: true, align: 'l', valign: 'm', inset: 0.08, edit: false, lock: true }));
     x += wI + 0.07;
     els.push(pbox('p' + i + '.p', x, y, wC, rh, '', '가격 추이', { t: '('+WKW[0]+'~'+WKW.at(-1)+' · $/mt)', c: COL.mute }, [], { tone: 'blue', bs: 7, hs: 9 }));
-    priceChart('p' + i + '.chart', x + 0.02, y + 0.2, wC - 0.04, rh - 0.22, { vals: seriesOf(k, false), cats: WKW.map(w => w.slice(1)), daily: false, dec: null, compact: true }).forEach(e => els.push(e));
+    priceChart('p' + i + '.chart', x + 0.02, y + 0.2, wC - 0.04, rh - 0.22, { vals: seriesOf(k, false), cats: WK10, daily: false, dec: null, compact: true }).forEach(e => els.push(e));
     x += wC + 0.07;
     els.push(pbox('p' + i + '.m', x, y, wM, rh, '', '시황 · 전망', null, bodyM(k), { tone: 'mint', bs: ptM, hs: 9, inset: 0.07 }));
     x += wM + 0.07;
