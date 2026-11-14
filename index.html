@@ -164,6 +164,7 @@ body:not(.presentation-view) #viewerNav {display:none;}
   <button id="bAdminMode" type="button" aria-pressed="false" title="기존 데이터·문구·스타일 편집 도구 열기">⚙ 관리자 모드</button>
   <button id="bShow" class="pri">▶ 전체화면 발표</button>
   <button id="bPptMenu" class="pri" type="button" title="현재 쪽 / 선택 쪽 / 전체 / 쪽별 개별 파일로 PPT 저장">PPT 저장 ▾</button>
+  <button id="bAsRec" type="button" title="주차별 전망 AS 판정 기록(18개 품목)을 CSV로 저장">AS 기록 CSV</button>
   <button id="bPdfAll" type="button" title="전체 슬라이드를 PDF 한 파일로 저장 (회사 용지 25.517 × 19.05 cm)">PDF 전체 저장</button>
   <select id="dpi" class="admin-only" title="PNG 해상도"><option value="150">PNG 150dpi (1507×1125)</option><option value="200" selected>PNG 200dpi (2009×1500)</option><option value="300">PNG 300dpi (3014×2250)</option></select>
   <button id="bPng" class="admin-only">PNG 저장</button>
@@ -1187,15 +1188,33 @@ function buildItem(k) {
 /* ---------------------------------------------------------------------
  * ① 전망 AS : 5대 주원료의 전주(W44) AI 전망 vs 이번 주 실제
  * --------------------------------------------------------------------- */
-function buildAS() {
+function buildAS(dyn) {
   const st = ST.style;
-  const hit = AS_ROWS.filter(r => r.hit).length, tot = AS_ROWS.length;
-  const p1 = [R('□ '), R('전주(W44) AI 전망 vs 이번 주 실제 — 5대 주원료 '), R('적중 ' + hit + '/' + tot + '건(' + fmt(hit / tot * 100, 0) + '%)', { u: true, c: st.sub }), R(' · BPA·MMA 적중, SM·AN·BD 오판')];
-  const p2 = [R('□ '), R('5개 모두 '), R('보합 전망', { u: true }), R('이었으나 SM·BD는 하락, AN은 상승으로 방향 이탈 — 원료비·유가 급변 구간의 판단 보정 필요')];
+  const rows = dyn ? dyn.rows : AS_ROWS;                                           // 동적(시트 주차) 또는 W45 원본 행
+  const judged = rows.filter(r => r.hit !== null);                                 // 판정 가능한 행만 적중률에 사용
+  const hit = judged.filter(r => r.hit).length, tot = judged.length;
+  const hitNames = judged.filter(r => r.hit).map(r => r.n).join('·'), missNames = judged.filter(r => !r.hit).map(r => r.n).join('·');
+  const prevLbl = dyn ? dyn.prevLabel : 'W44';
+  let p1, p2;
+  if (dyn) {                                                                       // 시트 주차 : 문구를 판정 결과에서 자동 생성
+    p1 = [R('□ '), R('전주(' + prevLbl + ') AI 전망 vs 이번 주 실제 — 5대 주원료 '), tot ? R('적중 ' + hit + '/' + tot + '건(' + fmt(hit / tot * 100, 0) + '%)', { u: true, c: st.sub }) : R('판정 불가', { u: true, c: st.red }),
+      R(tot ? (' · ' + (hitNames ? hitNames + ' 적중' : '적중 없음') + (missNames ? ', ' + missNames + ' 오판' : '')) : ' · 전주 AI 전망 원문을 불러오지 못했습니다')];
+    const miss = judged.filter(r => !r.hit).map(r => r.n + ' ' + r.f + '→' + r.a + '(' + pctStr(r.pct) + ')').join(', ');
+    p2 = [R('□ '), R(miss ? '방향 이탈 ' : (tot ? '5개 모두 ' : '전주 전망 방향 확인 필요')), R(miss || (tot ? '전망 방향과 실제 방향 일치' : ''), { u: true }), R(miss ? ' — 오판 원인을 다음 전망의 비용·수급 비중에 반영' : '')];
+  } else {
+    p1 = [R('□ '), R('전주(W44) AI 전망 vs 이번 주 실제 — 5대 주원료 '), R('적중 ' + hit + '/' + tot + '건(' + fmt(hit / tot * 100, 0) + '%)', { u: true, c: st.sub }), R(' · BPA·MMA 적중, SM·AN·BD 오판')];
+    p2 = [R('□ '), R('5개 모두 '), R('보합 전망', { u: true }), R('이었으나 SM·BD는 하락, AN은 상승으로 방향 이탈 — 원료비·유가 급변 구간의 판단 보정 필요')];
+  }
   const els = topMsg('전망 AS · 5대 주원료 전망 적중 점검 · ' + WEEK.label + ' (' + WEEK.end + ')', p1, p2);
   // KPI 띠(4개)
   const ky = 1.38, kh = 0.52, kg = 0.1, kw = (9.6 - 3 * kg) / 4;
-  const kp = [
+  const dn = rows.filter(r => r.pct < 0).sort((x, y) => x.pct - y.pct)[0], up = rows.filter(r => r.pct > 0).sort((x, y) => y.pct - x.pct)[0];   // 최대 하락·상승 품목
+  const kp = dyn ? [
+    ['5대 주원료 적중률', tot ? fmt(hit / tot * 100, 0) + '%' : '-', st.sub, tot ? hit + '/' + tot + ' 적중' : '전주 전망 없음', 'blue'],
+    ['전체 18품목 적중률', dyn.totAll ? fmt(dyn.hitAll / dyn.totAll * 100, 1) + '%' : '-', '000000', dyn.totAll ? dyn.totAll + '개 품목 중 ' + dyn.hitAll + '개 적중' : '전주 전망 없음', 'gray'],
+    ['최대 하락 괴리', dn ? dn.n + ' ' + pctStr(dn.pct) : '없음', st.sub, dn ? dn.px : '하락 품목 없음', 'blue'],
+    ['최대 상승 괴리', up ? up.n + ' ' + pctStr(up.pct) : '없음', st.red, up ? up.px : '상승 품목 없음', 'rose']
+  ] : [
     ['5대 주원료 적중률', fmt(hit / tot * 100, 0) + '%', st.sub, hit + '/' + tot + ' 적중 (BPA·MMA)', 'blue'],
     ['전체 보드 적중률', '55.6%', '000000', '18개 품목 중 10개 적중', 'gray'],
     ['최대 하락 괴리', 'SM △12.31%', st.sub, '$1,425.50 → $1,250.00/mt', 'blue'],
@@ -1208,12 +1227,12 @@ function buildAS() {
   // 5개 행 : 정보 카드 | 판정 근거 | 다음 주 점검
   const y0 = ky + kh + 0.07, gap = 0.06, rh = (7.16 - y0 - 4 * gap) / 5;
   const wI = 1.78, wB = 4.42, wN = 9.6 - wI - wB - 0.14;
-  const ptB = commonPt(AS_ROWS.map(r => ({ w: wB, h: rh, body: [r.bs], hs: 9.5, max: 9.5, min: 7, inset: 0.07 })));   // 판정 근거 공통 크기
-  const ptN = commonPt(AS_ROWS.map(r => ({ w: wN, h: rh, body: [r.nx], hs: 9.5, max: 9.5, min: 7, inset: 0.07 })));   // 다음 주 점검 공통 크기
-  AS_ROWS.forEach((r, i) => {
-    const y = y0 + i * (rh + gap), mc = r.hit ? st.sub : st.red, dc = r.pct > 0 ? st.red : (r.pct < 0 ? st.sub : COL.mute), tn = TONE[r.hit ? 'mint' : 'rose'];
+  const ptB = commonPt(rows.map(r => ({ w: wB, h: rh, body: [r.bs], hs: 9.5, max: 9.5, min: 7, inset: 0.07 })));   // 판정 근거 공통 크기
+  const ptN = commonPt(rows.map(r => ({ w: wN, h: rh, body: [r.nx], hs: 9.5, max: 9.5, min: 7, inset: 0.07 })));   // 다음 주 점검 공통 크기
+  rows.forEach((r, i) => {
+    const y = y0 + i * (rh + gap), mc = r.hit === null ? COL.mute : (r.hit ? st.sub : st.red), dc = r.pct > 0 ? st.red : (r.pct < 0 ? st.sub : COL.mute), tn = TONE[r.hit === null ? 'gray' : (r.hit ? 'mint' : 'rose')];
     els.push(T('as.i' + i, 0.22, y, wI, rh, [
-      [R(r.n, { size: 13, bold: true, color: '000000' }), R('   ' + (r.hit ? '● 적중' : '● 오판'), { size: 9.5, bold: true, color: mc })],
+      [R(r.n, { size: 13, bold: true, color: '000000' }), R('   ' + (r.hit === null ? '● 판정불가' : (r.hit ? '● 적중' : '● 오판')), { size: 9.5, bold: true, color: mc })],
       [R('전망 ' + r.f + ' → 실제 ' + r.a, { size: 8.5, bold: true, color: '000000' })],
       [R(r.px, { size: 7.5, color: COL.mute })],
       [R(r.pct === 0 ? '0.00% 보합' : pctStr(r.pct), { size: 11, bold: true, color: dc })]],
@@ -1221,7 +1240,9 @@ function buildAS() {
     els.push(pbox('as.b' + i, 0.22 + wI + 0.07, y, wB, rh, '', '판정 근거', null, [r.bs], { tone: 'blue', bs: ptB, hs: 9.5, inset: 0.07 }));
     els.push(pbox('as.n' + i, 0.22 + wI + 0.07 + wB + 0.07, y, wN, rh, '', '다음 주 점검', null, [r.nx], { tone: 'sun', bs: ptN, hs: 9.5, inset: 0.07 }));
   });
-  els.push(noteLine('f', '※ 출처: Petrochemical Weekly Board 전망 AS(' + WEEK.label + ', ' + WEEK.endFull + ') · 판정 근거·다음 주 점검은 보드 AS 요약문을 줄여 정리(수치·판정은 원문 그대로) · 적중 = 전망 방향과 실제 방향 일치'));
+  els.push(noteLine('f', dyn
+    ? '※ 출처: 공용 시트 ' + WEEK.label + '(' + WEEK.endFull + ') · 전주(' + prevLbl + ') AI 전망 방향 vs 전주 대비 가격 방향 · 적중 = 방향 일치, 보합 = 가격 변동 없음(소폭이라도 오르내리면 상승·하락) · 나머지 13개 품목은 판정만 기록(CSV 저장 가능)'
+    : '※ 출처: Petrochemical Weekly Board 전망 AS(' + WEEK.label + ', ' + WEEK.endFull + ') · 판정 근거·다음 주 점검은 보드 AS 요약문을 줄여 정리(수치·판정은 원문 그대로) · 적중 = 전망 방향과 실제 방향 일치'));
   return els;
 }
 
@@ -2385,6 +2406,7 @@ function bindEvents() {
   $('bCopy').onclick = () => guard('이미지 복사', () => copyPng(ST.cur, dpi()));
   $('bAllPng').onclick = () => guard('PNG 전체 저장', () => saveAllPng(dpi(), i => toast('PNG 전체 저장 ' + (i + 1) + '/' + SLIDES.length + ' …')));
   setupPptDialog();                                                             // PPT 저장 대화상자(모든 사용자)
+  $('bAsRec').onclick = () => guard('AS 기록 CSV 저장', () => saveAsCsv());      // 전망 AS 판정 기록 CSV
   $('bPdfAll').onclick = () => guard('PDF 전체 저장', () => savePdfAll());      // PDF 전체 저장(모든 사용자)
   $('bReset').onclick = () => { ST.texts = {}; lsSet(activeWeeklyTextStorageKey(), ST.texts); refresh(true); toast('선택 주차의 문구를 원래대로 되돌렸습니다'); };
   $('bData').onclick = () => { resetData(); saveData(); renderPanel(); refresh(true); toast('데이터를 원래 값으로 되돌렸습니다'); };
@@ -2588,6 +2610,7 @@ function restoreTemplate(){
 }
 function showArchive(entry){
   report=null;restoreTemplate();
+  if(!entry)prevAi=null;
   if(entry){
     const {data,dates,history}=entry;
     report=data;activeDates=dates;
@@ -2619,6 +2642,7 @@ function showArchive(entry){
       }
     }
     if(week!==seedEnd)delete ST.data.gk;
+    saveAsRecord();                                                        // 18개 품목 전망 적중 판정 기록
   }
   ST.texts=lsGet(activeWeeklyTextStorageKey(),{})||{};
   $('bData').hidden=!!entry;
@@ -2630,17 +2654,71 @@ function livePcts(k){
   if(prev===null||cur===null)return {prev,cur,chg:NaN,pct:NaN};
   return {prev,cur,chg:cur-prev,pct:prev?(cur-prev)/prev*100:NaN};
 }
-function weekReview(){
-  const els=header('전망 AS · 5대 주원료 점검 · '+WEEK.label+' ('+WEEK.end+')');
-  els.push(subMsg('m1',.83,'□ 전주 대비 가격 변화와 다음 주 점검 사항',.48));
-  ['SM','AN','BD','BPA','MMA'].forEach((k,i)=>{
-    const r=currentRow(k),y=1.42+i*1.14;
-    els.push(kpiBox('as.i'+i,.22,y,1.78,1.06,k,r.current_price||'미등록',null,'전주 '+(r.previous_price||'미등록'),null,'blue',12));
-    els.push(pbox('as.b'+i,2.07,y,4.42,1.06,'','이번 주 시황',null,[firstSent(r.commentary||'미등록')],{tone:'mint'}));
-    els.push(pbox('as.n'+i,6.56,y,3.26,1.06,'','다음 주 점검',null,[firstSent(r.outlook||'미등록')],{tone:'sun'}));
-  });
-  return els;
+/* ---- 전망 AS(적중 점검) : 전주 AI 전망 방향 vs 이번 주 실제 가격 방향 ---- */
+let prevAi=null;                                                                   // {week, prevWeek, tags:{품목:'상승'|'하락'|'보합'}} (전주 AI 전망 방향)
+function dirOf(prev,cur){                                                          // 가격 방향 : 같으면 보합, 조금이라도 오르면 상승·내리면 하락
+  if(prev===null||cur===null)return '';
+  const a=Math.round(prev*10000),b=Math.round(cur*10000);                          // 부동소수 오차 제거
+  return b>a?'상승':(b<a?'하락':'보합');
 }
+function tagDir(tag){const m=String(tag||'').match(/^(상승|하락|보합)/);return m?m[1]:'';}   // '보합 전망' → '보합'
+async function loadPrevAi(week){                                                   // 선택 주차의 직전 주차 AI 전망 방향 수집
+  prevAi=null;
+  const prevWeek=[...new Set([...catalog,seedEnd])].filter(d=>d<week).sort().at(-1);
+  if(!prevWeek)return;
+  const tags={};
+  if(prevWeek===seedEnd){                                                          // 직전 주가 첨부 원본(W45)이면 내장 원문 사용
+    names.forEach(k=>{const t=tagDir(baseline.text[k]&&baseline.text[k].tag);if(t)tags[k]=t;});
+  }else{                                                                           // 그 외는 공용 시트의 직전 주차 ai_outlook 앞머리 방향
+    let data=null;
+    try{data=(readArchive(prevWeek)||{}).data||await requestWeek('load',prevWeek);}catch{data=null;}
+    if(data&&Array.isArray(data.items)){
+      const arc=(await historicalContent()).by_week?.[prevWeek]||{};
+      data.items.forEach(r=>{
+        const ai=!isMissingHistoricalText(r.ai_outlook)?r.ai_outlook:(arc[r.item]&&arc[r.item].ai_outlook);
+        const t=tagDir(splitAiOutlook(ai).tag);if(t)tags[r.item]=t;
+      });
+    }
+  }
+  prevAi={week,prevWeek,tags};
+}
+function asJudgeAll(){                                                             // 18개 품목 전체 판정(화면에는 5개만, 나머지는 기록용)
+  return names.map(k=>{
+    const r=currentRow(k),p=price(r.previous_price),c=price(r.current_price);
+    const f=(prevAi&&prevAi.tags[k])||'',a=dirOf(p,c);
+    return {item:k,forecast:f,actual:a,prev:p,cur:c,pct:(p&&c!==null)?(c-p)/p*100:NaN,hit:(f&&a)?f===a:null};
+  });
+}
+function pxs(v){return '$'+fmt(v,Number.isInteger(v)?0:2);}                        // 가격 표기($1,250 / $1,425.50)
+function asDynamic(){                                                              // 시트 주차용 장표 데이터
+  const all=asJudgeAll(),core=['SM','AN','BD','BPA','MMA'];
+  const rows=core.map(k=>{
+    const j=all.find(x=>x.item===k),r=currentRow(k),ok=j.prev!==null&&j.cur!==null;
+    const px=ok?pxs(j.prev)+' → '+pxs(j.cur)+'/mt':'가격 미등록';
+    const f=j.forecast||'미등록',a=j.actual||'미등록';
+    const bs=(j.forecast?'전주 AI '+f+' 전망 → 실제 '+a+'('+(ok?px+', '+pctStr(j.pct):'')+'). ':'전주 AI 전망 원문을 불러오지 못했습니다. ')+firstSent(r.commentary||'시황 미등록');
+    const nx=firstSent(r.outlook||'전망 미등록');
+    return {n:k,f,a,hit:j.hit,pct:Number.isFinite(j.pct)?j.pct:0,px,bs,nx};
+  });
+  const done=all.filter(x=>x.hit!==null);
+  return {rows,hitAll:done.filter(x=>x.hit).length,totAll:done.length,prevLabel:prevAi?isoLabel(prevAi.prevWeek):'전주'};
+}
+function saveAsRecord(){                                                           // 18개 품목 판정 기록(이 기기 보관)
+  if(!report||!prevAi)return;
+  lsSet('weekly18.asrec.'+WEEK.endFull,{week:WEEK.endFull,label:WEEK.label,prevWeek:prevAi.prevWeek,saved:new Date().toISOString(),rows:asJudgeAll()});
+}
+function saveAsCsv(){                                                              // 보관된 전 주차 판정 기록을 CSV 로 저장
+  const keys=Object.keys(localStorage).filter(k=>k.startsWith('weekly18.asrec.')).sort();
+  if(!keys.length){toast('저장된 전망 AS 기록이 없습니다. 주차를 선택해 불러오면 자동 기록됩니다.',true);return;}
+  const lines=[['주차','기준일','전주 기준일','품목','전주 AI 전망','실제 방향','전주 가격','금주 가격','변동률(%)','판정'].join(',')];
+  keys.forEach(k=>{
+    const rec=lsGet(k,null);if(!rec||!Array.isArray(rec.rows))return;
+    rec.rows.forEach(r=>lines.push([rec.label,rec.week,rec.prevWeek,r.item,r.forecast||'미등록',r.actual||'미등록',r.prev??'',r.cur??'',Number.isFinite(r.pct)?r.pct.toFixed(2):'',r.hit===null?'판정불가':(r.hit?'적중':'오판')].map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')));
+  });
+  download(new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'}),'전망AS_판정기록_'+stamp()+'.csv');
+  toast('전망 AS 판정 기록 '+keys.length+'개 주차를 CSV로 저장했습니다.');
+}
+function weekReview(){return buildAS(asDynamic());}                                // 시트 주차 1쪽 : 5개 품목 적중 결과 장표
 function originalSlide(index){
   if(!report)return SLIDES[index].fn();
   const sameWeek=WEEK.endFull===seedEnd;
@@ -2677,6 +2755,7 @@ async function synchronize(refresh){
     if(!week){showArchive(null);status.textContent='첨부 W45 원본';return;}
     const entry=await assemble(week);
     const recovered=await enrichHistoricalMarketText(entry);
+    try{await loadPrevAi(week);}catch(e){console.warn('전주 AI 전망 조회 실패',e);prevAi=null;}   // 전주 AI 전망 방향 수집
     showArchive(entry);
     let saved=true;
     try{localStorage.setItem(archiveKey+week,JSON.stringify(entry));}catch{saved=false;}
@@ -2685,7 +2764,7 @@ async function synchronize(refresh){
   } catch{
     week=week||cachedDates().sort().at(-1);
     const entry=week&&readArchive(week);
-    if(entry){await enrichHistoricalMarketText(entry);showArchive(entry);options(week);status.textContent='보관본 · '+week+' · 실시간 조회 실패';}
+    if(entry){await enrichHistoricalMarketText(entry);try{await loadPrevAi(entry.data.week_end.slice(0,10));}catch{prevAi=null;}showArchive(entry);options(week);status.textContent='보관본 · '+week+' · 실시간 조회 실패';}
     else{options(prior);status.textContent='조회 실패 · '+(prior||'첨부 W45 원본')+' 표시 중';}
   } finally{sel.disabled=$('sheetRefresh').disabled=false;}
 }
