@@ -1363,7 +1363,7 @@ function regSlide(els, kL, kR, subL, subR) {
     const kt = TONE[dirTone(p.chg)];                                                                   // 가격 박스 색(방향 톤)
     els.push(T(g + '.k', x, y, wK, hK, [                                                               // 가격 박스(제목·벤치마크·값·등락·전주)
       [R(m.label, { size: 9, bold: true, color: COL.mute })],
-      [R(m.bm, { size: 7, color: COL.mute })],
+      [R(String(m.bm).replace(/^(Styrene|Butadiene)\s+/i, ''), { size: 7, color: COL.mute })],   // 벤치마크(품목명 앞머리 제거로 2줄 이내)
       [R(pv(p.cur), { size: 14, bold: true, color: dc })],
       [R(p.chg === 0 ? '보합' : pctStr(p.pct), { size: 11, bold: true, color: dc })],
       [R('전주 ' + prevTxt, { size: 7.5, color: COL.mute })]],
