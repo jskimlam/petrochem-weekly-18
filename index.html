@@ -1286,7 +1286,7 @@ function buildAS(dyn) {
     els.push(pbox('as.n' + i, 0.22 + wI + 0.07 + wB + 0.07, y, wN, rh, '', '다음 주 점검', null, [r.nx], { tone: 'sun', bs: ptN, hs: 9.5, inset: 0.07 }));
   });
   els.push(noteLine('f', dyn
-    ? '※ 출처: 공용 시트 ' + WEEK.label + '(' + WEEK.endFull + ') · 적중 = 전주(' + prevLbl + ') AI 전망 방향과 가격 방향 일치 · 보합 = 변동 없음 · 나머지 13품목은 기록만(AS 기록 CSV)'
+    ? '※ 출처: 공용 시트 ' + WEEK.label + '(' + WEEK.endFull + ') · 적중 = 전주(' + prevLbl + ') AI 전망 방향과 가격 방향 일치 · 보합 = 변동 없음 · 나머지 13품목은 기록만(AS 기록 CSV)' + (typeof asArc !== 'undefined' && asArc ? ' · 판정·판정 근거 = 전망 AS 원문(판정보류 제외)' : '')
     : '※ 출처: Petrochemical Weekly Board 전망 AS(' + WEEK.label + ', ' + WEEK.endFull + ') · 판정 근거·다음 주 점검은 보드 AS 요약문을 줄여 정리(수치·판정은 원문 그대로) · 적중 = 전망 방향과 실제 방향 일치'));
   return els;
 }
@@ -2658,6 +2658,15 @@ function historicalContent(){
   }
   return HISTORICAL_CONTENT_PROMISE;
 }
+let AS_CONTENT_PROMISE=null,asArc=null;                                              // asArc: 선택 주차의 전망 AS 원문(품목별 판정·AS 핵심·4축 분석) 없으면 null
+function asContent(){                                                               // data/weekly_as_archive.json 조회(시트 응답에 AS 필드가 없어 저장소 파일 사용)
+  if(!AS_CONTENT_PROMISE){
+    AS_CONTENT_PROMISE=fetch('./data/weekly_as_archive.json?t='+Date.now(),{cache:'no-store'})
+      .then(r=>{if(!r.ok)throw Error('AS archive '+r.status);return r.json();})
+      .catch(e=>{console.warn('전망 AS 원문 조회 실패',e);return {by_week:{}};});
+  }
+  return AS_CONTENT_PROMISE;
+}
 function isMissingHistoricalText(value){
   if(value===null||value===undefined)return true;
   if(Array.isArray(value))return value.length===0;
@@ -2744,6 +2753,7 @@ function asDir(prev,cur){                                                       
 function tagDir(tag){const m=String(tag||'').match(/^(상승|하락|보합)/);return m?m[1]:'';}   // '보합 전망' → '보합'
 async function loadPrevAi(week){                                                   // 선택 주차의 직전 주차 AI 전망 방향 수집
   prevAi=null;
+  try{asArc=(((await asContent()).by_week)||{})[week]||null;}catch{asArc=null;}     // 이 주차의 전망 AS 원문(있으면 판정·근거에 우선 사용)
   const prevWeek=[...new Set([...catalog,seedEnd])].filter(d=>d<week).sort().at(-1);
   if(!prevWeek)return;
   const tags={},bodies={};                                                         // tags: 전주 AI 전망 방향 / bodies: 전주 AI 전망 본문(판정 근거용)
@@ -2765,8 +2775,10 @@ async function loadPrevAi(week){                                                
 function asJudgeAll(){                                                             // 18개 품목 전체 판정(화면에는 5개만, 나머지는 기록용)
   return names.map(k=>{
     const r=currentRow(k),p=price(r.previous_price),c=price(r.current_price);
-    const f=(prevAi&&prevAi.tags[k])||'',a=asDir(p,c);
-    return {item:k,forecast:f,actual:a,prev:p,cur:c,pct:(p&&c!==null)?(c-p)/p*100:NaN,hit:(f&&a)?f===a:null};
+    let f=(prevAi&&prevAi.tags[k])||'',a=asDir(p,c),hit=(f&&a)?f===a:null,at=a;
+    const ar=asArc&&asArc[k];                                                      // 전망 AS 원문이 있으면 그 판정(적중/오판/판정보류)을 따른다
+    if(ar){f=tagDir(ar.forecast)||f;at=ar.actual||a;hit=ar.verdict==='적중'?true:(ar.verdict==='오판'?false:null);if(hit!==null)a=ar.actual;}
+    return {item:k,forecast:f,actual:a,actualTxt:at,prev:p,cur:c,pct:(p&&c!==null)?(c-p)/p*100:NaN,hit:hit,verdict:ar?ar.verdict:''};
   });
 }
 function pxs(v){return '$'+fmt(v,Number.isInteger(v)?0:2);}                        // 가격 표기($1,250 / $1,425.50)
@@ -2775,9 +2787,9 @@ function asDynamic(){                                                           
   const rows=core.map(k=>{
     const j=all.find(x=>x.item===k),r=currentRow(k),ok=j.prev!==null&&j.cur!==null;
     const px=ok?pxs(j.prev)+' → '+pxs(j.cur)+'/mt':'가격 미등록';
-    const f=j.forecast||'미등록',a=j.actual||'미등록';
+    const f=j.forecast||'미등록',a=j.actualTxt||j.actual||'미등록',ar=asArc&&asArc[k];
     const why=(prevAi&&prevAi.bodies&&prevAi.bodies[k])?firstSent(prevAi.bodies[k]):'';        // 전주 AI 전망의 근거(본문 첫 문장)
-    const bs=(j.forecast?'전주 AI '+f+' 전망 → 실제 '+a+'('+(ok?px+', '+pctStr(j.pct):'')+'). ':'전주 AI 전망 원문을 불러오지 못했습니다. ')+(why?'[전주 AI 근거] '+why+'. ':'')+'[실제] '+firstSent(r.commentary||'시황 미등록');   // 판정 근거 = 방향 비교 + 전주 AI 근거 + 금주 실제 시황
+    const bs=ar&&ar.core?ar.core:(j.forecast?'전주 AI '+f+' 전망 → 실제 '+a+'('+(ok?px+', '+pctStr(j.pct):'')+'). ':'전주 AI 전망 원문을 불러오지 못했습니다. ')+(why?'[전주 AI 근거] '+why+'. ':'')+'[실제] '+firstSent(r.commentary||'시황 미등록');   // 판정 근거 = 방향 비교 + 전주 AI 근거 + 금주 실제 시황
     const nx=firstSent(r.outlook||'전망 미등록');
     return {n:k,f,a,hit:j.hit,pct:Number.isFinite(j.pct)?j.pct:0,px,bs,nx};
   });
