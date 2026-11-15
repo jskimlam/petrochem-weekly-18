@@ -570,7 +570,11 @@ function subMsg(id, y, paras, h, o) {
   o = o || {};
   const ps = normParas(paras);                                                    // 문단 정규화
   const sz = o.size || 13;                                                        // 첫 문단 글자 크기
-  const fixed = ps.map((p, i) => (i === 0 ? p : p.map(r => Object.assign({ size: sz - 1.5 }, r))));   // 둘째 문단부터 작게
+  const fixed = ps.map((p, i) => {                                                // 둘째 문단부터 작게 + 문단마다 고아 줄(마지막 줄에 단어 하나만 남는 것) 방지
+    const base = i === 0 ? sz : sz - 1.5;
+    const pt = antiWidowPt(p.map(r => r.t).join(''), 9.6, base, 1.5, true);          // 최대 1.5pt까지 줄여 고아 줄 해소
+    return p.map(r => Object.assign({ size: pt }, r));
+  });
   return T(id, 0.17, y, 9.7, h, fixed, { size: sz, bold: true, color: '000000', valign: 'm', align: 'l', inset: 0.05 });
 }
 // 카드: 흰 바탕 + 연회색 테두리 + 번호·제목 글자가 도형 안에 들어 있는 하나의 개체
@@ -968,7 +972,7 @@ function chW(ch, pt) {                                                          
   else em = 0.54;
   return em * pt / 72;
 }
-function lineCount(text, pt, wIn) {                                                     // 글자를 폭 wIn(in)에 채울 때의 줄 수
+function lineInfo(text, pt, wIn) {                                                      // 줄 수 + 마지막 줄이 찬 폭(in)
   const words = String(text).split(' '), sp = 0.3 * pt / 72;
   let lines = 1, cur = 0;
   words.forEach(w => {
@@ -977,23 +981,49 @@ function lineCount(text, pt, wIn) {                                             
     else if (cur + sp + ww <= wIn) cur += sp + ww;
     else { lines++; if (ww > wIn) { lines += Math.floor(ww / wIn); cur = ww % wIn; } else cur = ww; }
   });
-  return lines;
+  return { lines: lines, last: cur };
+}
+function lineCount(text, pt, wIn) { return lineInfo(text, pt, wIn).lines; }             // 글자를 폭 wIn(in)에 채울 때의 줄 수
+// [줄바꿈 규칙 1] 고아 줄 금지 : 2줄 이상인 글의 마지막 줄이 폭의 30% 미만이면(예: 맨 끝에 "있음"만 남음) 어색한 줄바꿈으로 본다
+function hasWidow(text, pt, wIn) { const i = lineInfo(text, pt, wIn); return i.lines > 1 && i.last < 0.3 * wIn; }
+// [줄바꿈 규칙 2] 한 줄 고정 : 한 줄에 들어가는 가장 큰 글자 크기(없으면 null). 굵은 글자는 폭을 6% 더 잡는다
+function fit1(text, wIn, pt, minPt, bold) {
+  const k = bold ? 0.94 : 0.98;
+  for (let p = pt; p >= minPt - 1e-9; p -= 0.25) if (lineCount(text, p, wIn * k) <= 1) return p;
+  return null;
+}
+// 고아 줄이 생기면 글자 크기를 최대 maxDown(pt)까지 0.25씩 줄여 고아 줄 없는 크기를 찾는다(못 찾으면 원래 크기)
+function antiWidowPt(text, wIn, pt, maxDown, bold) {
+  const w = wIn * (bold ? 0.94 : 0.98);
+  if (!hasWidow(text, pt, w)) return pt;
+  for (let p = pt - 0.25; p >= pt - maxDown - 1e-9; p -= 0.25) if (!hasWidow(text, p, w)) return p;
+  return pt;
 }
 function fitPt(texts, wIn, hIn, headPt, max, min) {                                      // 상자(폭·높이)에 들어가는 가장 큰 글자 크기(pt)
-  const head = headPt * 1.27 / 72;
-  for (let pt = max; pt >= min; pt -= 0.25) {
-    let need = head;
-    texts.forEach(t => { need += lineCount(t, pt, wIn) * pt * 1.27 / 72; });
-    if (need <= hIn * 0.89) return pt;
+  const need = pt => { let n = headPt * 1.27 / 72; texts.forEach(t => { n += lineCount(t, pt, wIn) * pt * 1.27 / 72; }); return n; };
+  const ok = pt => need(pt) <= hIn * 0.89;
+  let best = min;
+  for (let pt = max; pt >= min; pt -= 0.25) { if (ok(pt)) { best = pt; break; } }
+  if (!ok(best)) return best;                                                            // 최소 크기로도 안 맞으면 최소 크기(넘침은 실측으로 확인)
+  if (texts.every(t => !hasWidow(t, best, wIn))) return best;
+  for (let pt = best - 0.25; pt >= Math.max(min, best - 0.75) - 1e-9; pt -= 0.25) {      // 고아 줄이 있으면 최대 0.75pt까지 줄여 해소
+    if (ok(pt) && texts.every(t => !hasWidow(t, pt, wIn))) return pt;
   }
-  return min;
+  return best;
 }
 
 // 같은 종류의 박스 여러 개가 같은 글자 크기를 쓰도록 가장 작은 값을 고른다(spec: {w,h,body,hs,max,min,inset})
 function boxTexts(body) { return body.map(b => (typeof b === 'string' ? b : (b.mark ? b.mark + ' ' : '') + b.t)); }
 function commonPt(specs) {
   let m = 99;
-  specs.forEach(sp => { const ins = sp.inset || 0.08; m = Math.min(m, fitPt(boxTexts(sp.body), sp.w - 2 * ins, sp.h - 2 * ins, sp.hs || 10.5, sp.max || 10, sp.min || 7)); });
+  const rows = specs.map(sp => { const ins = sp.inset || 0.08; return { t: boxTexts(sp.body), w: sp.w - 2 * ins, h: sp.h - 2 * ins, hs: sp.hs || 10.5, mn: sp.min || 7 }; });
+  specs.forEach((sp, i) => { const r = rows[i]; m = Math.min(m, fitPt(r.t, r.w, r.h, r.hs, sp.max || 10, r.mn)); });
+  const wFree = pt => rows.every(r => r.t.every(t => !hasWidow(t, pt, r.w)));
+  const fits = pt => rows.every(r => { let n = r.hs * 1.27 / 72; r.t.forEach(t => { n += lineCount(t, pt, r.w) * pt * 1.27 / 72; }); return n <= r.h * 0.89; });
+  if (wFree(m)) return m;
+  for (let pt = m - 0.25; pt >= m - 0.75 - 1e-9; pt -= 0.25) {                           // 좌우 박스 모두 고아 줄이 없는 크기를 최대 0.75pt 아래에서 찾는다
+    if (pt >= Math.max.apply(null, rows.map(r => r.mn)) - 1e-9 && fits(pt) && wFree(pt)) return pt;
+  }
   return m;
 }
 const WKW = WK10.map((d, i) => 'W' + (36 + i));                                          // 좁은 차트용 주차 라벨(W36=9/4 … W45=11/6)
@@ -1036,8 +1066,9 @@ function dirTone(chg) { return chg > 0 ? 'rose' : (chg < 0 ? 'blue' : 'gray'); }
 
 // KPI 상자(제목 · 큰 숫자 · 보조 설명이 한 개체 · 파스텔 바탕)
 function kpiBox(id, x, y, w, h, title, value, vcolor, sub, scolor, tone, vs) {
-  const t = TONE[tone || 'white'];
-  return T(id, x, y, w, h, [[R(title, { size: 9, bold: true, color: COL.mute })], [R(value, { size: vs || 17, bold: true, color: vcolor || '000000' })], [R(sub || ' ', { size: 8, color: scolor || COL.mute })]],
+  const t = TONE[tone || 'white'], iw = w - 0.12;                                 // 상자 안쪽 폭
+  const sT = fit1(title, iw, 9, 7, true) || 7, sV = fit1(value, iw, vs || 17, 10, true) || 10, sS = fit1(sub || ' ', iw, 8, 6, false) || 6;   // [한 줄 고정 규칙] 줄마다 한 줄에 들어가는 크기
+  return T(id, x, y, w, h, [[R(title, { size: sT, bold: true, color: COL.mute })], [R(value, { size: sV, bold: true, color: vcolor || '000000' })], [R(sub || ' ', { size: sS, color: scolor || COL.mute })]],
     { fill: t.fill, line: { c: t.line === 'D9D9D9' ? ST.style.main : t.line, w: 1 }, rr: true, align: 'c', valign: 'm', inset: 0.03, edit: false, lock: true });
 }
 
@@ -1346,6 +1377,19 @@ const REG = {
   '유럽 SM': { label: '유럽 SM', bm: 'FOB Rotterdam 11월물 Close', dec: 0, unit: '/mt', u2: '$/mt' },
   '유럽 BD': { label: '유럽 BD', bm: 'FOB ARA Spot Weekly (ICIS)', dec: 0, unit: '/mt', u2: '$/mt' }
 };
+// 가격 박스 규칙 : ① 모든 줄은 한 줄 ② 벤치마크는 길면 줄임(앞머리 제품명 제거 → 'Current Month Close'→'당월 Close' → 글자 5.5pt까지 축소 → 끝 단어 생략) ③ 전체 높이가 상자 안에 들어갈 때까지 전체를 0.7배까지 축소
+function priceBoxParas(label, bm, valStr, chgStr, prevStr, dc, w, h, ins) {
+  const iw = w - 2 * ins - 0.08, avail = (h - 2 * ins) * 0.9;
+  let bt = String(bm || '').replace(/^(Styrene|Butadiene)\s+/i, '').replace(/\s*Current Month Close$/i, ' 당월 Close').replace(/\s*Current Month$/i, ' 당월');
+  for (let sc = 1; sc >= 0.7 - 1e-9; sc -= 0.05) {
+    const sz = { lab: fit1(label, iw, 9 * sc, 7, true) || 7, val: fit1(valStr, iw, 13 * sc, 9, true) || 9, chg: fit1(chgStr, iw, 10 * sc, 8, true) || 8, prev: fit1(prevStr, iw, 7.5 * sc, 6, false) || 6 };
+    let t = bt, p = fit1(t, iw, 6.5 * sc, 5.5, false);
+    while (p === null && t.split(' ').length > 2) { const tk = t.split(' '); tk.pop(); t = tk.join(' '); p = fit1(t, iw, 6.5 * sc, 5.5, false); }   // 그래도 길면 끝 단어를 생략
+    if (p === null) p = 5.5;
+    const need = (sz.lab + p + sz.val + sz.chg + sz.prev) * 1.27 / 72;
+    if (need <= avail || sc <= 0.7 + 1e-9) return [[R(label, { size: sz.lab, bold: true, color: COL.mute })], [R(t, { size: p, color: COL.mute })], [R(valStr, { size: sz.val, bold: true, color: dc })], [R(chgStr, { size: sz.chg, bold: true, color: dc })], [R(prevStr, { size: sz.prev, color: COL.mute })]];
+  }
+}
 function regSlide(els, kL, kR, subL, subR) {
   // 배치 : [가격 박스 | 가격 추이] 한 줄 → 코멘터리 → [변동요인 45% | 결론 및 전망 55%] → AI 전망 (원문은 줄이지 않고 변동요인 6개 전부 표시)
   const st = ST.style, hw = (9.6 - 0.07) / 2, y0 = 1.42, GAP = 0.07, YE = 7.16;
@@ -1381,12 +1425,7 @@ function regSlide(els, kL, kR, subL, subR) {
     const prevTxt = pv(p.prev);                                                                         // 전주 값 문자열(단위 포함)
     let y = y0;
     const kt = TONE[dirTone(p.chg)];                                                                   // 가격 박스 색(방향 톤)
-    els.push(T(g + '.k', x, y, wK, hK, [                                                               // 가격 박스(제목·벤치마크·값·등락·전주)
-      [R(m.label, { size: 9, bold: true, color: COL.mute })],
-      [R(String(m.bm).replace(/^(Styrene|Butadiene)\s+/i, ''), { size: 6.5, color: COL.mute })],   // 벤치마크(품목명 앞머리 제거)
-      [R(pv(p.cur), { size: 13, bold: true, color: dc })],
-      [R(p.chg === 0 ? '보합' : pctStr(p.pct), { size: 10, bold: true, color: dc })],
-      [R('전주 ' + prevTxt, { size: 7.5, color: COL.mute })]],
+    els.push(T(g + '.k', x, y, wK, hK, priceBoxParas(m.label, m.bm, pv(p.cur), p.chg === 0 ? '보합' : pctStr(p.pct), '전주 ' + prevTxt, dc, wK, hK, 0.03),   // 가격 박스(제목·벤치마크·값·등락·전주) — 모든 줄 한 줄 고정
       { fill: kt.fill, line: { c: kt.line === 'D9D9D9' ? st.main : kt.line, w: 1 }, rr: true, align: 'c', valign: 'm', inset: 0.03, edit: false, lock: true }));
     const x2 = x + wK + GAP, w2 = hw - wK - GAP;                                                       // 가격 추이 박스(오른쪽)
     els.push(pbox(g + '.p', x2, y, w2, hK, '', '가격 추이', { t: '(최근 10주 · ' + m.u2 + ')', c: COL.mute }, [], { tone: 'blue', bs: 8, hs: 10 }));
