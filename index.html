@@ -1271,7 +1271,7 @@ function buildAS(dyn) {
   });
   // 5개 행 : 정보 카드 | 판정 근거 | 다음 주 점검
   const y0 = ky + kh + 0.07, gap = 0.06, rh = (7.16 - y0 - 4 * gap) / 5;
-  const wI = 1.78, wB = 4.42, wN = 9.6 - wI - wB - 0.14;
+  const wI = 1.78, wB = dyn ? 4.82 : 4.42, wN = 9.6 - wI - wB - 0.14;   // 시트 주차는 판정 근거 문장이 길어 폭을 넓힘
   const ptB = commonPt(rows.map(r => ({ w: wB, h: rh, body: [r.bs], hs: 9.5, max: 9.5, min: 7, inset: 0.07 })));   // 판정 근거 공통 크기
   const ptN = commonPt(rows.map(r => ({ w: wN, h: rh, body: [r.nx], hs: 9.5, max: 9.5, min: 7, inset: 0.07 })));   // 다음 주 점검 공통 크기
   rows.forEach((r, i) => {
@@ -2746,9 +2746,9 @@ async function loadPrevAi(week){                                                
   prevAi=null;
   const prevWeek=[...new Set([...catalog,seedEnd])].filter(d=>d<week).sort().at(-1);
   if(!prevWeek)return;
-  const tags={};
+  const tags={},bodies={};                                                         // tags: 전주 AI 전망 방향 / bodies: 전주 AI 전망 본문(판정 근거용)
   if(prevWeek===seedEnd){                                                          // 직전 주가 첨부 원본(W45)이면 내장 원문 사용
-    names.forEach(k=>{const t=tagDir(baseline.text[k]&&baseline.text[k].tag);if(t)tags[k]=t;});
+    names.forEach(k=>{const t=tagDir(baseline.text[k]&&baseline.text[k].tag);if(t)tags[k]=t;const b=baseline.text[k]&&baseline.text[k].ai;if(b)bodies[k]=String(b);});
   }else{                                                                           // 그 외는 공용 시트의 직전 주차 ai_outlook 앞머리 방향
     let data=null;
     try{data=(readArchive(prevWeek)||{}).data||await requestWeek('load',prevWeek);}catch{data=null;}
@@ -2756,11 +2756,11 @@ async function loadPrevAi(week){                                                
       const arc=(await historicalContent()).by_week?.[prevWeek]||{};
       data.items.forEach(r=>{
         const ai=!isMissingHistoricalText(r.ai_outlook)?r.ai_outlook:(arc[r.item]&&arc[r.item].ai_outlook);
-        const t=tagDir(splitAiOutlook(ai).tag);if(t)tags[r.item]=t;
+        const sp=splitAiOutlook(ai),t=tagDir(sp.tag);if(t)tags[r.item]=t;if(sp.body)bodies[r.item]=sp.body;
       });
     }
   }
-  prevAi={week,prevWeek,tags};
+  prevAi={week,prevWeek,tags,bodies};
 }
 function asJudgeAll(){                                                             // 18개 품목 전체 판정(화면에는 5개만, 나머지는 기록용)
   return names.map(k=>{
@@ -2776,7 +2776,8 @@ function asDynamic(){                                                           
     const j=all.find(x=>x.item===k),r=currentRow(k),ok=j.prev!==null&&j.cur!==null;
     const px=ok?pxs(j.prev)+' → '+pxs(j.cur)+'/mt':'가격 미등록';
     const f=j.forecast||'미등록',a=j.actual||'미등록';
-    const bs=(j.forecast?'전주 AI '+f+' 전망 → 실제 '+a+'('+(ok?px+', '+pctStr(j.pct):'')+'). ':'전주 AI 전망 원문을 불러오지 못했습니다. ')+firstSent(r.commentary||'시황 미등록');
+    const why=(prevAi&&prevAi.bodies&&prevAi.bodies[k])?firstSent(prevAi.bodies[k]):'';        // 전주 AI 전망의 근거(본문 첫 문장)
+    const bs=(j.forecast?'전주 AI '+f+' 전망 → 실제 '+a+'('+(ok?px+', '+pctStr(j.pct):'')+'). ':'전주 AI 전망 원문을 불러오지 못했습니다. ')+(why?'[전주 AI 근거] '+why+'. ':'')+'[실제] '+firstSent(r.commentary||'시황 미등록');   // 판정 근거 = 방향 비교 + 전주 AI 근거 + 금주 실제 시황
     const nx=firstSent(r.outlook||'전망 미등록');
     return {n:k,f,a,hit:j.hit,pct:Number.isFinite(j.pct)?j.pct:0,px,bs,nx};
   });
