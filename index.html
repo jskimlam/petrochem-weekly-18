@@ -62,9 +62,9 @@ select { font-family:inherit; font-size:12.5px; padding:5px; border:1px solid #b
 .tx { display:flex; flex-direction:column; white-space:pre-wrap; }
 .tx > .in { width:100%; }
 .in { outline:none; }
-.p { white-space:pre-wrap; word-break:keep-all; overflow-wrap:break-word; }
+.p { white-space:pre-wrap; word-break:keep-all; overflow-wrap:break-word; text-wrap:pretty; } /* 화면 보조: 마지막 줄에 한 단어만 남는 고아 줄을 브라우저가 한 번 더 완화 */
 .tb { border-collapse:collapse; table-layout:fixed; }
-.tb td { white-space:pre-wrap; word-break:keep-all; overflow-wrap:break-word; }
+.tb td { white-space:pre-wrap; word-break:keep-all; overflow-wrap:break-word; text-wrap:pretty; }
 .ed:hover { outline:1px dashed #7aa7d9; outline-offset:1px; }
 .ed:focus { outline:2px solid #1c5fa8; outline-offset:1px; background:rgba(255,250,200,.55); }
 .exporting .ed, .exporting .ed:hover, .exporting .ed:focus { outline:none !important; background:none !important; }
