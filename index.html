@@ -1286,7 +1286,7 @@ function buildAS(dyn) {
     els.push(pbox('as.n' + i, 0.22 + wI + 0.07 + wB + 0.07, y, wN, rh, '', '다음 주 점검', null, [r.nx], { tone: 'sun', bs: ptN, hs: 9.5, inset: 0.07 }));
   });
   els.push(noteLine('f', dyn
-    ? '※ 출처: 공용 시트 ' + WEEK.label + '(' + WEEK.endFull + ') · 적중 = 전주(' + prevLbl + ') AI 전망 방향과 가격 방향 일치 · 보합 = 변동 없음 · 나머지 13품목은 기록만(AS 기록 CSV)' + (typeof asArc !== 'undefined' && asArc ? ' · 판정·판정 근거 = 전망 AS 원문(판정보류 제외)' : '')
+    ? '※ 출처: 공용 시트 ' + WEEK.label + '(' + WEEK.endFull + ') · 적중 = 전주(' + prevLbl + ') AI 전망 방향과 가격 방향 일치 · 보합 = 변동 없음 · 나머지 13품목은 기록만(AS 기록 CSV)' + (typeof asArc !== 'undefined' && asArc ? ' · 판정·판정 근거 = 전망 AS 원문(' + (asSrc === 'sheet' ? '공용 시트' : '저장소 파일') + ', 판정보류 제외)' : '')
     : '※ 출처: Petrochemical Weekly Board 전망 AS(' + WEEK.label + ', ' + WEEK.endFull + ') · 판정 근거·다음 주 점검은 보드 AS 요약문을 줄여 정리(수치·판정은 원문 그대로) · 적중 = 전망 방향과 실제 방향 일치'));
   return els;
 }
@@ -2658,14 +2658,32 @@ function historicalContent(){
   }
   return HISTORICAL_CONTENT_PROMISE;
 }
-let AS_CONTENT_PROMISE=null,asArc=null;                                              // asArc: 선택 주차의 전망 AS 원문(품목별 판정·AS 핵심·4축 분석) 없으면 null
-function asContent(){                                                               // data/weekly_as_archive.json 조회(시트 응답에 AS 필드가 없어 저장소 파일 사용)
+let AS_CONTENT_PROMISE=null,asArc=null,asSrc='';                                     // asArc: 선택 주차의 전망 AS(품목별 판정·AS 핵심·4축 분석) 없으면 null / asSrc: 'sheet' | 'file'
+function asContent(){                                                               // 저장소 data/weekly_as_archive.json (시트에 AS 가 없을 때의 대체 원본)
   if(!AS_CONTENT_PROMISE){
     AS_CONTENT_PROMISE=fetch('./data/weekly_as_archive.json?t='+Date.now(),{cache:'no-store'})
       .then(r=>{if(!r.ok)throw Error('AS archive '+r.status);return r.json();})
       .catch(e=>{console.warn('전망 AS 원문 조회 실패',e);return {by_week:{}};});
   }
   return AS_CONTENT_PROMISE;
+}
+const AS_SHEET_CACHE={};                                                           // 주차별 시트 AS 조회 결과(같은 접속 중 재사용)
+async function asFromSheet(week){                                                  // 공용 시트 action=as 조회 → {품목:{forecast,actual,verdict,core,axes,ai_outlook}} 또는 null(미지원·빈 값)
+  if(week in AS_SHEET_CACHE)return AS_SHEET_CACHE[week];
+  let out=null;
+  try{
+    const response=await fetch(ENDPOINT+'?'+new URLSearchParams({action:'as',week}),{cache:'no-store',signal:AbortSignal.timeout(20000)});
+    const data=response.ok?await response.json():null;
+    if(data&&data.success&&Array.isArray(data.items)&&data.items.some(r=>r.core||r.ai_outlook)){          // 시트에 AS(또는 AI 전망)가 입력된 경우만 사용
+      out={};data.items.forEach(r=>{out[r.item]={forecast:r.forecast||'',actual:r.actual||'',verdict:r.verdict||'',core:r.core||'',axes:Array.isArray(r.axes)?r.axes:[],ai_outlook:r.ai_outlook||''};});
+    }
+  }catch(e){console.warn('시트 AS 조회 실패 → 저장소 파일 사용',e);}
+  AS_SHEET_CACHE[week]=out;return out;
+}
+async function asForWeek(week){                                                    // 시트 우선, 없으면 저장소 JSON
+  const sh=await asFromSheet(week);
+  if(sh&&Object.values(sh).some(v=>v.core)){asSrc='sheet';return sh;}
+  try{const f=(((await asContent()).by_week)||{})[week]||null;asSrc=f?'file':'';return f;}catch{asSrc='';return null;}
 }
 function isMissingHistoricalText(value){
   if(value===null||value===undefined)return true;
@@ -2753,7 +2771,7 @@ function asDir(prev,cur){                                                       
 function tagDir(tag){const m=String(tag||'').match(/^(상승|하락|보합)/);return m?m[1]:'';}   // '보합 전망' → '보합'
 async function loadPrevAi(week){                                                   // 선택 주차의 직전 주차 AI 전망 방향 수집
   prevAi=null;
-  try{asArc=(((await asContent()).by_week)||{})[week]||null;}catch{asArc=null;}     // 이 주차의 전망 AS 원문(있으면 판정·근거에 우선 사용)
+  try{asArc=await asForWeek(week);}catch{asArc=null;}                               // 이 주차의 전망 AS(시트 우선 → 저장소 JSON)
   const prevWeek=[...new Set([...catalog,seedEnd])].filter(d=>d<week).sort().at(-1);
   if(!prevWeek)return;
   const tags={},bodies={};                                                         // tags: 전주 AI 전망 방향 / bodies: 전주 AI 전망 본문(판정 근거용)
@@ -2770,6 +2788,10 @@ async function loadPrevAi(week){                                                
       });
     }
   }
+  try{                                                                             // 직전 주차의 AI 전망을 시트(weekly_as.ai_outlook)에 입력했다면 그 값을 우선
+    const shp=await asFromSheet(prevWeek);
+    if(shp)Object.keys(shp).forEach(k=>{const sp=splitAiOutlook(shp[k].ai_outlook),t=tagDir(sp.tag);if(t)tags[k]=t;if(sp.body)bodies[k]=sp.body;});
+  }catch{}
   prevAi={week,prevWeek,tags,bodies};
 }
 function asJudgeAll(){                                                             // 18개 품목 전체 판정(화면에는 5개만, 나머지는 기록용)
