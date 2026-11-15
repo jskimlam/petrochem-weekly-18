@@ -1358,7 +1358,7 @@ function buildPoly() {
       { fill: TONE[dirTone(p.chg)].fill, line: { c: TONE[dirTone(p.chg)].line, w: 0.75 }, rr: true, align: 'l', valign: 'm', inset: 0.08, edit: false, lock: true }));
     x += wI + 0.07;
     els.push(pbox('p' + i + '.p', x, y, wC, rh, '', '가격 추이', { t: '('+WKW[0]+'~'+WKW.at(-1)+' · $/mt)', c: COL.mute }, [], { tone: 'blue', bs: 7, hs: 9 }));
-    priceChart('p' + i + '.chart', x + 0.02, y + 0.2, wC - 0.04, rh - 0.22, { vals: seriesOf(k, false), cats: WK10, daily: false, dec: null, compact: true }).forEach(e => els.push(e));
+    priceChart('p' + i + '.chart', x + 0.02, y + 0.2, wC - 0.04, rh - 0.22, { vals: seriesOf(k, false), cats: WK10, daily: false, dec: null, compact: true, center: true }).forEach(e => els.push(e));
     x += wC + 0.07;
     els.push(pbox('p' + i + '.m', x, y, wM, rh, '', '시황 · 전망', null, bodyM(k), { tone: 'mint', bs: ptM, hs: 9, inset: 0.07 }));
     x += wM + 0.07;
