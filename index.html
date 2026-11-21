@@ -2652,7 +2652,7 @@ async function assemble(week){
 let HISTORICAL_CONTENT_PROMISE=null;
 function historicalContent(){
   if(!HISTORICAL_CONTENT_PROMISE){
-    HISTORICAL_CONTENT_PROMISE=fetch('./data/weekly_content_archive.json?v=20261114&t='+Date.now(),{cache:'no-store'})   /* 호출마다 주소를 바꿔 중간 캐시가 옛 원문을 주지 못하게 함 */
+    HISTORICAL_CONTENT_PROMISE=fetch('./data/weekly_content_archive.json?v=20261121&t='+Date.now(),{cache:'no-store'})   /* 호출마다 주소를 바꿔 중간 캐시가 옛 원문을 주지 못하게 함 */
       .then(r=>{if(!r.ok)throw Error('Historical archive '+r.status);return r.json();})
       .catch(e=>{console.warn('과거 시황 원문 복원 실패',e);return {by_week:{}};});
   }
